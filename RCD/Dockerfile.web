@@ -1,0 +1,21 @@
+
+# Dockerfile for serving Next.js frontend from esports-rcd-frontend
+FROM node:18-alpine
+
+# Set working directory for Next.js app
+WORKDIR /usr/src/app
+
+# Copy Next.js frontend files
+COPY esports-rcd-frontend/ ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Build Next.js app
+RUN npm run build
+
+# Expose port 3000 for Next.js server
+EXPOSE 3000
+
+# Start Next.js frontend
+CMD ["npm", "start"]

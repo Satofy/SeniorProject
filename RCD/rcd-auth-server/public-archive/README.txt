@@ -1,0 +1,1 @@
+Legacy frontend files (HTML, CSS, JS) have been archived here. The active frontend is now served from esports-rcd-frontend (Next.js).

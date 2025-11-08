@@ -1,0 +1,1 @@
+self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/home/satoof/Documents/SeniorProject/RCD/app/layout\":[\"static/media/4cf2300e9c8272f7-s.p.woff2\",\"static/media/93f479601ee12b01-s.p.woff2\",\"static/media/97ac91773d3121b2-s.p.woff2\"]},\"appUsingSizeAdjust\":true,\"pagesUsingSizeAdjust\":false}"

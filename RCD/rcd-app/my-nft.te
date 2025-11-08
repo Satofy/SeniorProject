@@ -1,0 +1,254 @@
+
+module my-nft 1.0;
+
+require {
+	type modemmanager_t;
+	type plymouthd_t;
+	type cupsd_t;
+	type unconfined_service_t;
+	type colord_t;
+	type fsdaemon_t;
+	type init_t;
+	type system_cronjob_t;
+	type gssproxy_t;
+	type abrt_dump_oops_t;
+	type systemd_userdbd_t;
+	type flatpak_helper_t;
+	type tuned_t;
+	type irqbalance_t;
+	type switcheroo_control_t;
+	type snappy_t;
+	type kernel_t;
+	type systemd_homed_t;
+	type systemd_resolved_t;
+	type alsa_t;
+	type xdm_t;
+	type systemd_oomd_t;
+	type tuned_ppd_t;
+	type locate_t;
+	type unconfined_t;
+	type syslogd_t;
+	type xserver_t;
+	type config_home_t;
+	type systemd_coredump_t;
+	type devicekit_disk_t;
+	type rpm_t;
+	type firewalld_t;
+	type systemd_machined_t;
+	type NetworkManager_dispatcher_t;
+	type avahi_t;
+	type sshd_t;
+	type system_dbusd_t;
+	type policykit_t;
+	type auditd_t;
+	type udev_t;
+	type fwupd_t;
+	type accountsd_t;
+	type systemd_logind_t;
+	type mount_t;
+	type chronyd_t;
+	type crond_t;
+	type rtkit_daemon_t;
+	type sssd_t;
+	type pasta_t;
+	type policykit_auth_t;
+	type devicekit_power_t;
+	type unconfined_dbusd_t;
+	type iptables_t;
+	type container_t;
+	type geoclue_t;
+	type waydroid_t;
+	type pcscd_t;
+	type ptmx_t;
+	class dir { getattr open read search };
+	class lnk_file read;
+	class file { append getattr open read };
+	class cap_userns sys_ptrace;
+	class capability sys_ptrace;
+	class chr_file { read write };
+}
+
+#============= iptables_t ==============
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t NetworkManager_dispatcher_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t abrt_dump_oops_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t accountsd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t alsa_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t auditd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t avahi_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t chronyd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t colord_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t config_home_t:file append;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t container_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t crond_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t cupsd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t devicekit_disk_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t devicekit_power_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t firewalld_t:dir { getattr open read search };
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t firewalld_t:file { getattr open read };
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t firewalld_t:lnk_file read;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t flatpak_helper_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t fsdaemon_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t fwupd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t geoclue_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t gssproxy_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t init_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t irqbalance_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t kernel_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t locate_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t modemmanager_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t mount_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t pasta_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t pcscd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t plymouthd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t policykit_auth_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t policykit_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t ptmx_t:chr_file { read write };
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t rpm_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t rtkit_daemon_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t self:cap_userns sys_ptrace;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t self:capability sys_ptrace;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t snappy_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t sshd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t sssd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t switcheroo_control_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t syslogd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t system_cronjob_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t system_dbusd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_coredump_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_homed_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_logind_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_machined_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_oomd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_resolved_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t systemd_userdbd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t tuned_ppd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t tuned_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t udev_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t unconfined_dbusd_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t unconfined_service_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t unconfined_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t waydroid_t:lnk_file read;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t xdm_t:dir search;
+
+#!!!! This avc is allowed in the current policy
+allow iptables_t xserver_t:dir search;
