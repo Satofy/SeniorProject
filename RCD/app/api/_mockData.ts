@@ -1,10 +1,11 @@
 // Simple in-memory mock data for dev use
 
 export type MockUser = {
-  id: string
-  email: string
-  role: "guest" | "player" | "team_manager" | "admin"
-}
+  id: string;
+  email: string;
+  role: "guest" | "player" | "team_manager" | "admin";
+  username?: string;
+};
 
 export type MockTeam = {
   id: string
@@ -35,11 +36,26 @@ const newid = () => String(counter++)
 
 // Seed users
 export const users: MockUser[] = [
-  { id: "1", email: "owner@example.com", role: "team_manager" },
-  { id: "2", email: "player1@example.com", role: "player" },
-  { id: "3", email: "player2@example.com", role: "player" },
-  { id: "4", email: "admin@example.com", role: "admin" },
-]
+  {
+    id: "1",
+    email: "owner@example.com",
+    role: "team_manager",
+    username: "owner",
+  },
+  {
+    id: "2",
+    email: "player1@example.com",
+    role: "player",
+    username: "player1",
+  },
+  {
+    id: "3",
+    email: "player2@example.com",
+    role: "player",
+    username: "player2",
+  },
+  { id: "4", email: "admin@example.com", role: "admin", username: "admin" },
+];
 
 // Seed teams
 export const teams: MockTeam[] = [
@@ -137,6 +153,19 @@ export function deleteTeam(teamId: string) {
   const [removed] = teams.splice(idx, 1)
   log(removed.managerId, "delete_team", `Team ${removed.name} (${removed.id}) deleted`)
   return true
+}
+
+export function addUser(
+  email: string,
+  password?: string,
+  username?: string,
+  role: MockUser["role"] = "player"
+) {
+  // Note: password is ignored in mock
+  const u: MockUser = { id: newid(), email, role, username };
+  users.push(u);
+  log(u.id, "register", `User ${email} registered`);
+  return u;
 }
 
 export function addTournament(data: Partial<MockTournament>) {
