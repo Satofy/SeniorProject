@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { addTournament, tournaments as mockTournaments, registerForTournament } from "../_mockData"
 
 type PandaTournament = {
   id: number
@@ -21,40 +22,27 @@ function mapStatus(s?: string): "upcoming" | "ongoing" | "completed" {
   }
 }
 
+// Switch to in-memory mock tournaments to support admin CRUD while keeping shape consistent
 export async function GET() {
-  const token = process.env.PANDASCORE_TOKEN || process.env.PANDA_KEY
-  if (!token) {
-    return NextResponse.json(
-      { message: "Missing PANDASCORE_TOKEN. Add it to .env.local and restart dev server." },
-      { status: 500 },
-    )
+  return NextResponse.json(mockTournaments)
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  if (!body?.title || !body?.date) {
+    return NextResponse.json({ message: "title and date are required" }, { status: 400 })
   }
+  const t = addTournament(body)
+  return NextResponse.json(t, { status: 201 })
+}
 
-  const headers = { Authorization: `Bearer ${token}` }
-  const games = ["valorant", "lol", "dota2"]
-
-  try {
-    const results = await Promise.all(
-      games.map(async (g) => {
-        const res = await fetch(
-          `https://api.pandascore.co/${g}/tournaments?sort=-begin_at&per_page=10`,
-          { headers, cache: "no-store" },
-        )
-        if (!res.ok) return [] as any[]
-        const data = (await res.json()) as PandaTournament[]
-        return data.map((t) => ({
-          id: `${g}-${t.id}`,
-          title: t.name,
-          date: t.begin_at || t.end_at || new Date().toISOString(),
-          type: g.toUpperCase(),
-          status: mapStatus(t.status),
-        }))
-      }),
-    )
-
-    const merged = results.flat().slice(0, 24)
-    return NextResponse.json(merged)
-  } catch (e: any) {
-    return NextResponse.json({ message: e?.message || "Failed to fetch tournaments" }, { status: 500 })
+export async function PATCH(req: NextRequest) {
+  // Optional bulk/utility action: register endpoint passthrough
+  const body = await req.json().catch(() => ({}))
+  if (body?.register && body?.id) {
+    const ok = registerForTournament(String(body.id))
+    if (!ok) return NextResponse.json({ message: "Not found or full" }, { status: 400 })
+    return NextResponse.json({ success: true })
   }
+  return NextResponse.json({ message: "Unsupported operation" }, { status: 400 })
 }
