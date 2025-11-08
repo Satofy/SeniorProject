@@ -1,2 +1,25 @@
 node_modules/
 .env
+
+# Next.js
+RCD/.next/
+RCD/out/
+RCD/.vercel/
+
+# Logs
+*.log
+RCD/npm-debug.log*
+RCD/yarn-debug.log*
+RCD/yarn-error.log*
+RCD/pnpm-debug.log*
+
+# Env files
+.env.local
+.env.*.local
+
+# Coverage
+coverage/
+
+# Misc
+*.DS_Store
+RCD/.turbo/
