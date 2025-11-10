@@ -17,7 +17,7 @@ const navItems = [
 ]
 
 export function AdminSidebar() {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? "";
   const router = useRouter()
   const { logout } = useAuth()
 
@@ -43,7 +43,7 @@ export function AdminSidebar() {
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname.startsWith(item.href)
+          const isActive = pathname ? pathname.startsWith(item.href) : false;
           return (
             <Link
               key={item.href}

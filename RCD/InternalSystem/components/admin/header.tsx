@@ -5,12 +5,13 @@ import { usePathname, useRouter } from "next/navigation"
 import { ChevronLeft, User } from "lucide-react"
 
 export function AdminHeader() {
-  const pathname = usePathname()
+  const pathnameRaw = usePathname();
+  const pathname = pathnameRaw ?? "";
   const router = useRouter()
   const [user] = useState({ name: "Admin User", role: "Super Admin" })
 
   const getPageTitle = () => {
-    const segments = pathname.split("/")
+  const segments = pathname.split("/");
     if (segments.includes("dashboard")) return "Dashboard"
     if (segments.includes("tournaments")) return "Tournaments"
     if (segments.includes("calendar")) return "Calendar"
@@ -19,7 +20,7 @@ export function AdminHeader() {
     return "Admin"
   }
 
-  const showBack = pathname !== "/internal/admin/dashboard"
+  const showBack = pathname && pathname !== "/internal/admin/dashboard";
 
   return (
     <header className="bg-primary h-20 border-b border-border flex items-center px-8 justify-between">
