@@ -1,5 +1,8 @@
 // API client for RCD backend
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ""
+const DATA_MODE = (
+  process.env.NEXT_PUBLIC_DATA_MODE || (API_BASE ? "real" : "mock")
+).toLowerCase() as "mock" | "real";
 
 export interface User {
   id: string
@@ -59,7 +62,8 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE}${endpoint}`
+    const base = DATA_MODE === "real" ? API_BASE : ""
+    const url = `${base}${endpoint}`
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -74,6 +78,32 @@ class ApiClient {
     }
 
     return response.json()
+  }
+
+  private normalizeTournament(raw: any): Tournament {
+    // Works for both mock and real
+    const id = String(raw.id || raw._id)
+    const dateStr = typeof raw.date === "string" ? raw.date : raw.date ? new Date(raw.date).toISOString() : new Date().toISOString()
+    const max = raw.maxParticipants ?? raw.max_participants
+    const current = raw.currentParticipants ?? raw.current_participants ?? (Array.isArray(raw.participants) ? raw.participants.length : undefined)
+    let status: Tournament["status"] = (raw.status as any) || "upcoming"
+    if (!raw.status && dateStr) {
+      const d = new Date(dateStr).getTime()
+      const now = Date.now()
+      status = d > now ? "upcoming" : "completed"
+    }
+    return {
+      id,
+      title: raw.title || raw.name || "Untitled",
+      description: raw.description || undefined,
+      date: dateStr,
+      type: raw.type || "single-elimination",
+      status,
+      maxParticipants: typeof max === "number" ? max : undefined,
+      currentParticipants: typeof current === "number" ? current : undefined,
+      prizePool: raw.prizePool || raw.prize_pool || undefined,
+      game: raw.game || undefined,
+    }
   }
 
   // Auth endpoints
@@ -111,11 +141,13 @@ class ApiClient {
 
   // Tournament endpoints
   async getTournaments() {
-    return this.request<Tournament[]>("/api/tournaments")
+    const res = await this.request<any[]>("/api/tournaments");
+    return res.map((t) => this.normalizeTournament(t));
   }
 
   async getTournament(id: string) {
-    return this.request<Tournament>(`/api/tournaments/${id}`)
+    const t = await this.request<any>(`/api/tournaments/${id}`);
+    return this.normalizeTournament(t);
   }
 
   async registerForTournament(id: string, teamId?: string) {
@@ -126,17 +158,20 @@ class ApiClient {
   }
 
   async createTournament(data: Partial<Tournament>) {
-    return this.request<Tournament>("/api/tournaments", {
+    const t = await this.request<any>("/api/tournaments", {
       method: "POST",
       body: JSON.stringify(data),
-    })
+    });
+    return this.normalizeTournament(t);
   }
 
   async updateTournament(id: string, data: Partial<Tournament>) {
-    return this.request<Tournament>(`/api/tournaments/${id}`, {
-      method: "PUT",
+    const method = "PATCH";
+    const t = await this.request<any>(`/api/tournaments/${id}`, {
+      method,
       body: JSON.stringify(data),
-    })
+    });
+    return this.normalizeTournament(t);
   }
 
   async deleteTournament(id: string) {
@@ -208,10 +243,15 @@ class ApiClient {
   }
 
   async changePassword(oldPassword: string, newPassword: string) {
-    return this.request(`/api/users/change-password`, {
+    // Real backend exposes change-password under /api/auth
+    const path =
+      DATA_MODE === "real"
+        ? "/api/auth/change-password"
+        : "/api/auth/change-password";
+    return this.request(path, {
       method: "POST",
       body: JSON.stringify({ oldPassword, newPassword }),
-    })
+    });
   }
 
   // Admin endpoints
@@ -233,7 +273,8 @@ class ApiClient {
   }
 
   async getAuditLogs() {
-    return this.request<any[]>("/api/admin/logs")
+    const path = DATA_MODE === "real" ? "/api/audit-logs" : "/api/admin/logs";
+    return this.request<any[]>(path);
   }
 }
 

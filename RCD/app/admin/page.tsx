@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react";
 import { api, type User, type Team, type Tournament } from "@/lib/api"
 import { ProtectedRoute } from "@/components/protected-route"
 import { Button } from "@/components/ui/button"
@@ -25,23 +25,27 @@ import { useSearchParams } from "next/navigation"
 
 function AdminContent() {
   const searchParams = useSearchParams()
-  const defaultTab = searchParams.get("tab") || "users"
+  const defaultTab = (searchParams && searchParams.get("tab")) || "users";
 
-  const [users, setUsers] = useState<User[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [tournaments, setTournaments] = useState<Tournament[]>([])
-  const [auditLogs, setAuditLogs] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [users, setUsers] = useState<User[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const lastAuditIdRef = useRef<string | null>(null);
+  const [enableLiveLogs, setEnableLiveLogs] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // User management state
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [showUserDialog, setShowUserDialog] = useState(false)
-  const [newRole, setNewRole] = useState<User["role"]>("player")
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserDialog, setShowUserDialog] = useState(false);
+  const [newRole, setNewRole] = useState<User["role"]>("player");
 
   // Tournament management state
-  const [showTournamentDialog, setShowTournamentDialog] = useState(false)
-  const [editingTournament, setEditingTournament] = useState<Tournament | null>(null)
+  const [showTournamentDialog, setShowTournamentDialog] = useState(false);
+  const [editingTournament, setEditingTournament] = useState<Tournament | null>(
+    null
+  );
   const [tournamentForm, setTournamentForm] = useState({
     title: "",
     description: "",
@@ -51,91 +55,99 @@ function AdminContent() {
     maxParticipants: "",
     prizePool: "",
     game: "",
-  })
+  });
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const [usersData, teamsData, tournamentsData, logsData] = await Promise.all([
-        api.getUsers(),
-        api.getTeams(),
-        api.getTournaments(),
-        api.getAuditLogs().catch(() => []),
-      ])
-      setUsers(usersData)
-      setTeams(teamsData)
-      setTournaments(tournamentsData)
-      setAuditLogs(logsData)
+      const [usersData, teamsData, tournamentsData, logsData] =
+        await Promise.all([
+          api.getUsers(),
+          api.getTeams(),
+          api.getTournaments(),
+          api.getAuditLogs().catch(() => []),
+        ]);
+      setUsers(usersData);
+      setTeams(teamsData);
+      setTournaments(tournamentsData);
+      setAuditLogs(logsData);
+      if (logsData && logsData.length) {
+        // Remember newest identifier (timestamp+action) as a composite key
+        const newest = logsData[0];
+        lastAuditIdRef.current = `${newest.timestamp}-${newest.action}`;
+      }
     } catch (error) {
-      toast.error("Failed to load admin data")
+      toast.error("Failed to load admin data");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleChangeUserRole = async () => {
-    if (!selectedUser) return
+    if (!selectedUser) return;
 
     try {
-      await api.changeUserRole(selectedUser.id, newRole)
-      toast.success("User role updated successfully")
-      setShowUserDialog(false)
-      fetchData()
+      await api.changeUserRole(selectedUser.id, newRole);
+      toast.success("User role updated successfully");
+      setShowUserDialog(false);
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Failed to update user role")
+      toast.error(error.message || "Failed to update user role");
     }
-  }
+  };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return
+    if (!confirm("Are you sure you want to delete this user?")) return;
 
     try {
-      await api.deleteUser(userId)
-      toast.success("User deleted successfully")
-      fetchData()
+      await api.deleteUser(userId);
+      toast.success("User deleted successfully");
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete user")
+      toast.error(error.message || "Failed to delete user");
     }
-  }
+  };
 
   const handleDeleteTeam = async (teamId: string) => {
-    if (!confirm("Are you sure you want to delete this team?")) return
+    if (!confirm("Are you sure you want to delete this team?")) return;
 
     try {
-      await api.deleteTeam(teamId)
-      toast.success("Team deleted successfully")
-      fetchData()
+      await api.deleteTeam(teamId);
+      toast.success("Team deleted successfully");
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete team")
+      toast.error(error.message || "Failed to delete team");
     }
-  }
+  };
 
   const handleSaveTournament = async () => {
     if (!tournamentForm.title || !tournamentForm.date) {
-      toast.error("Title and date are required")
-      return
+      toast.error("Title and date are required");
+      return;
     }
 
     try {
       const data = {
         ...tournamentForm,
-        maxParticipants: tournamentForm.maxParticipants ? Number.parseInt(tournamentForm.maxParticipants) : undefined,
-      }
+        maxParticipants: tournamentForm.maxParticipants
+          ? Number.parseInt(tournamentForm.maxParticipants)
+          : undefined,
+      };
 
       if (editingTournament) {
-        await api.updateTournament(editingTournament.id, data)
-        toast.success("Tournament updated successfully")
+        await api.updateTournament(editingTournament.id, data);
+        toast.success("Tournament updated successfully");
       } else {
-        await api.createTournament(data)
-        toast.success("Tournament created successfully")
+        await api.createTournament(data);
+        toast.success("Tournament created successfully");
       }
 
-      setShowTournamentDialog(false)
-      setEditingTournament(null)
+      setShowTournamentDialog(false);
+      setEditingTournament(null);
       setTournamentForm({
         title: "",
         description: "",
@@ -145,27 +157,27 @@ function AdminContent() {
         maxParticipants: "",
         prizePool: "",
         game: "",
-      })
-      fetchData()
+      });
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Failed to save tournament")
+      toast.error(error.message || "Failed to save tournament");
     }
-  }
+  };
 
   const handleDeleteTournament = async (tournamentId: string) => {
-    if (!confirm("Are you sure you want to delete this tournament?")) return
+    if (!confirm("Are you sure you want to delete this tournament?")) return;
 
     try {
-      await api.deleteTournament(tournamentId)
-      toast.success("Tournament deleted successfully")
-      fetchData()
+      await api.deleteTournament(tournamentId);
+      toast.success("Tournament deleted successfully");
+      fetchData();
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete tournament")
+      toast.error(error.message || "Failed to delete tournament");
     }
-  }
+  };
 
   const openEditTournament = (tournament: Tournament) => {
-    setEditingTournament(tournament)
+    setEditingTournament(tournament);
     setTournamentForm({
       title: tournament.title,
       description: tournament.description || "",
@@ -175,25 +187,62 @@ function AdminContent() {
       maxParticipants: tournament.maxParticipants?.toString() || "",
       prizePool: tournament.prizePool || "",
       game: tournament.game || "",
-    })
-    setShowTournamentDialog(true)
-  }
+    });
+    setShowTournamentDialog(true);
+  };
 
   const filteredUsers = users.filter(
     (u) =>
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username?.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+      u.username?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const filteredTeams = teams.filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredTeams = teams.filter((t) =>
+    t.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const filteredTournaments = tournaments.filter((t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredTournaments = tournaments.filter((t) =>
+    t.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Live audit log polling (fallback to polling; SSE could be added later)
+  useEffect(() => {
+    if (!enableLiveLogs) return;
+    const interval = setInterval(async () => {
+      try {
+        const logs = await api.getAuditLogs().catch(() => []);
+        if (!Array.isArray(logs) || logs.length === 0) return;
+        const newest = logs[0];
+        const newKey = `${newest.timestamp}-${newest.action}`;
+        if (lastAuditIdRef.current && newKey !== lastAuditIdRef.current) {
+          // Find all logs that are newer than stored ref
+          const idx = logs.findIndex(
+            (l: any) => `${l.timestamp}-${l.action}` === lastAuditIdRef.current
+          );
+          const fresh = idx === -1 ? logs : logs.slice(0, idx);
+          fresh.reverse().forEach((log: any) => {
+            toast.info(`${log.action.replace(/_/g, " ")}`, {
+              description:
+                log.details || new Date(log.timestamp).toLocaleTimeString(),
+            });
+          });
+        }
+        lastAuditIdRef.current = newKey;
+        setAuditLogs(logs);
+      } catch (_) {
+        /* silent */
+      }
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [enableLiveLogs]);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Admin Panel</h1>
-        <p className="text-muted-foreground">Manage users, teams, tournaments, and system settings</p>
+        <p className="text-muted-foreground">
+          Manage users, teams, tournaments, and system settings
+        </p>
       </div>
 
       {/* Stats Overview */}
@@ -218,7 +267,9 @@ function AdminContent() {
         </Card>
         <Card className="border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Tournaments</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Tournaments
+            </CardTitle>
             <Trophy className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -227,12 +278,18 @@ function AdminContent() {
         </Card>
         <Card className="border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Tournaments</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Active Tournaments
+            </CardTitle>
             <Trophy className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {tournaments.filter((t) => t.status === "ongoing" || t.status === "upcoming").length}
+              {
+                tournaments.filter(
+                  (t) => t.status === "ongoing" || t.status === "upcoming"
+                ).length
+              }
             </div>
           </CardContent>
         </Card>
@@ -240,11 +297,22 @@ function AdminContent() {
 
       {/* Main Content */}
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        <TabsList>
+        <TabsList className="flex flex-wrap gap-2">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="teams">Teams</TabsTrigger>
           <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+          <div className="ml-auto flex items-center gap-2 px-2">
+            <label className="text-xs font-medium flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={enableLiveLogs}
+                onChange={(e) => setEnableLiveLogs(e.target.checked)}
+                className="rounded border-muted-foreground"
+              />
+              Live Logs
+            </label>
+          </div>
         </TabsList>
 
         {/* Users Tab */}
@@ -254,7 +322,9 @@ function AdminContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>User Management</CardTitle>
-                  <CardDescription>Manage user accounts and permissions</CardDescription>
+                  <CardDescription>
+                    Manage user accounts and permissions
+                  </CardDescription>
                 </div>
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -284,7 +354,9 @@ function AdminContent() {
                   <TableBody>
                     {filteredUsers.map((user) => (
                       <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.email}</TableCell>
+                        <TableCell className="font-medium">
+                          {user.email}
+                        </TableCell>
                         <TableCell>{user.username || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
@@ -298,9 +370,9 @@ function AdminContent() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setSelectedUser(user)
-                                setNewRole(user.role)
-                                setShowUserDialog(true)
+                                setSelectedUser(user);
+                                setNewRole(user.role);
+                                setShowUserDialog(true);
                               }}
                             >
                               <Shield className="w-4 h-4 mr-1" />
@@ -332,7 +404,9 @@ function AdminContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Team Management</CardTitle>
-                  <CardDescription>Manage teams and their members</CardDescription>
+                  <CardDescription>
+                    Manage teams and their members
+                  </CardDescription>
                 </div>
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -362,8 +436,16 @@ function AdminContent() {
                   <TableBody>
                     {filteredTeams.map((team) => (
                       <TableRow key={team.id}>
-                        <TableCell className="font-medium">{team.name}</TableCell>
-                        <TableCell>{team.tag ? <Badge variant="outline">{team.tag}</Badge> : "-"}</TableCell>
+                        <TableCell className="font-medium">
+                          {team.name}
+                        </TableCell>
+                        <TableCell>
+                          {team.tag ? (
+                            <Badge variant="outline">{team.tag}</Badge>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
                         <TableCell>{team.members?.length || 0}</TableCell>
                         <TableCell>{team.gamesPlayed || 0}</TableCell>
                         <TableCell className="text-right">
@@ -393,7 +475,9 @@ function AdminContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Tournament Management</CardTitle>
-                  <CardDescription>Create and manage tournaments</CardDescription>
+                  <CardDescription>
+                    Create and manage tournaments
+                  </CardDescription>
                 </div>
                 <div className="flex gap-3">
                   <div className="relative w-64">
@@ -429,16 +513,20 @@ function AdminContent() {
                   <TableBody>
                     {filteredTournaments.map((tournament) => (
                       <TableRow key={tournament.id}>
-                        <TableCell className="font-medium">{tournament.title}</TableCell>
-                        <TableCell>{new Date(tournament.date).toLocaleDateString()}</TableCell>
+                        <TableCell className="font-medium">
+                          {tournament.title}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(tournament.date).toLocaleDateString()}
+                        </TableCell>
                         <TableCell>
                           <Badge
                             variant={
                               tournament.status === "upcoming"
                                 ? "default"
                                 : tournament.status === "ongoing"
-                                  ? "secondary"
-                                  : "outline"
+                                ? "secondary"
+                                : "outline"
                             }
                           >
                             {tournament.status}
@@ -446,18 +534,26 @@ function AdminContent() {
                         </TableCell>
                         <TableCell>
                           {tournament.currentParticipants || 0}
-                          {tournament.maxParticipants ? ` / ${tournament.maxParticipants}` : ""}
+                          {tournament.maxParticipants
+                            ? ` / ${tournament.maxParticipants}`
+                            : ""}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" onClick={() => openEditTournament(tournament)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditTournament(tournament)}
+                            >
                               <Edit className="w-4 h-4 mr-1" />
                               Edit
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleDeleteTournament(tournament.id)}
+                              onClick={() =>
+                                handleDeleteTournament(tournament.id)
+                              }
                               className="text-destructive"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -478,7 +574,9 @@ function AdminContent() {
           <Card>
             <CardHeader>
               <CardTitle>Audit Logs</CardTitle>
-              <CardDescription>View system activity and user actions</CardDescription>
+              <CardDescription>
+                View system activity and user actions
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {auditLogs.length > 0 ? (
@@ -494,17 +592,23 @@ function AdminContent() {
                   <TableBody>
                     {auditLogs.map((log, index) => (
                       <TableRow key={index}>
-                        <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                        <TableCell>
+                          {new Date(log.timestamp).toLocaleString()}
+                        </TableCell>
                         <TableCell>{log.user}</TableCell>
                         <TableCell>{log.action}</TableCell>
-                        <TableCell className="text-muted-foreground">{log.details}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {log.details}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               ) : (
                 <div className="text-center py-12">
-                  <p className="text-muted-foreground">No audit logs available</p>
+                  <p className="text-muted-foreground">
+                    No audit logs available
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -517,11 +621,16 @@ function AdminContent() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change User Role</DialogTitle>
-            <DialogDescription>Update the role for {selectedUser?.email}</DialogDescription>
+            <DialogDescription>
+              Update the role for {selectedUser?.email}
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="role">Select Role</Label>
-            <Select value={newRole} onValueChange={(value) => setNewRole(value as User["role"])}>
+            <Select
+              value={newRole}
+              onValueChange={(value) => setNewRole(value as User["role"])}
+            >
               <SelectTrigger id="role" className="mt-2">
                 <SelectValue />
               </SelectTrigger>
@@ -542,12 +651,19 @@ function AdminContent() {
       </Dialog>
 
       {/* Create/Edit Tournament Dialog */}
-      <Dialog open={showTournamentDialog} onOpenChange={setShowTournamentDialog}>
+      <Dialog
+        open={showTournamentDialog}
+        onOpenChange={setShowTournamentDialog}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingTournament ? "Edit Tournament" : "Create Tournament"}</DialogTitle>
+            <DialogTitle>
+              {editingTournament ? "Edit Tournament" : "Create Tournament"}
+            </DialogTitle>
             <DialogDescription>
-              {editingTournament ? "Update tournament details" : "Fill in the tournament information"}
+              {editingTournament
+                ? "Update tournament details"
+                : "Fill in the tournament information"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -559,7 +675,12 @@ function AdminContent() {
                 <Input
                   id="title"
                   value={tournamentForm.title}
-                  onChange={(e) => setTournamentForm({ ...tournamentForm, title: e.target.value })}
+                  onChange={(e) =>
+                    setTournamentForm({
+                      ...tournamentForm,
+                      title: e.target.value,
+                    })
+                  }
                   placeholder="Tournament name"
                 />
               </div>
@@ -571,7 +692,12 @@ function AdminContent() {
                   id="date"
                   type="date"
                   value={tournamentForm.date}
-                  onChange={(e) => setTournamentForm({ ...tournamentForm, date: e.target.value })}
+                  onChange={(e) =>
+                    setTournamentForm({
+                      ...tournamentForm,
+                      date: e.target.value,
+                    })
+                  }
                 />
               </div>
             </div>
@@ -580,7 +706,12 @@ function AdminContent() {
               <Input
                 id="description"
                 value={tournamentForm.description}
-                onChange={(e) => setTournamentForm({ ...tournamentForm, description: e.target.value })}
+                onChange={(e) =>
+                  setTournamentForm({
+                    ...tournamentForm,
+                    description: e.target.value,
+                  })
+                }
                 placeholder="Tournament description"
               />
             </div>
@@ -589,14 +720,20 @@ function AdminContent() {
                 <Label htmlFor="type">Type</Label>
                 <Select
                   value={tournamentForm.type}
-                  onValueChange={(value) => setTournamentForm({ ...tournamentForm, type: value })}
+                  onValueChange={(value) =>
+                    setTournamentForm({ ...tournamentForm, type: value })
+                  }
                 >
                   <SelectTrigger id="type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single-elimination">Single Elimination</SelectItem>
-                    <SelectItem value="double-elimination">Double Elimination</SelectItem>
+                    <SelectItem value="single-elimination">
+                      Single Elimination
+                    </SelectItem>
+                    <SelectItem value="double-elimination">
+                      Double Elimination
+                    </SelectItem>
                     <SelectItem value="round-robin">Round Robin</SelectItem>
                   </SelectContent>
                 </Select>
@@ -606,7 +743,10 @@ function AdminContent() {
                 <Select
                   value={tournamentForm.status}
                   onValueChange={(value) =>
-                    setTournamentForm({ ...tournamentForm, status: value as Tournament["status"] })
+                    setTournamentForm({
+                      ...tournamentForm,
+                      status: value as Tournament["status"],
+                    })
                   }
                 >
                   <SelectTrigger id="status">
@@ -626,7 +766,12 @@ function AdminContent() {
                 <Input
                   id="game"
                   value={tournamentForm.game}
-                  onChange={(e) => setTournamentForm({ ...tournamentForm, game: e.target.value })}
+                  onChange={(e) =>
+                    setTournamentForm({
+                      ...tournamentForm,
+                      game: e.target.value,
+                    })
+                  }
                   placeholder="e.g., Rocket League"
                 />
               </div>
@@ -636,7 +781,12 @@ function AdminContent() {
                   id="maxParticipants"
                   type="number"
                   value={tournamentForm.maxParticipants}
-                  onChange={(e) => setTournamentForm({ ...tournamentForm, maxParticipants: e.target.value })}
+                  onChange={(e) =>
+                    setTournamentForm({
+                      ...tournamentForm,
+                      maxParticipants: e.target.value,
+                    })
+                  }
                   placeholder="e.g., 32"
                 />
               </div>
@@ -646,7 +796,12 @@ function AdminContent() {
               <Input
                 id="prizePool"
                 value={tournamentForm.prizePool}
-                onChange={(e) => setTournamentForm({ ...tournamentForm, prizePool: e.target.value })}
+                onChange={(e) =>
+                  setTournamentForm({
+                    ...tournamentForm,
+                    prizePool: e.target.value,
+                  })
+                }
                 placeholder="e.g., $10,000"
               />
             </div>
@@ -655,8 +810,8 @@ function AdminContent() {
             <Button
               variant="outline"
               onClick={() => {
-                setShowTournamentDialog(false)
-                setEditingTournament(null)
+                setShowTournamentDialog(false);
+                setEditingTournament(null);
                 setTournamentForm({
                   title: "",
                   description: "",
@@ -666,7 +821,7 @@ function AdminContent() {
                   maxParticipants: "",
                   prizePool: "",
                   game: "",
-                })
+                });
               }}
             >
               Cancel
@@ -678,7 +833,7 @@ function AdminContent() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
 
 export default function AdminPage() {

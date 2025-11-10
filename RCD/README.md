@@ -17,8 +17,6 @@ A modern, professional Esports tournament management platform built with Next.js
 
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS v4
-- **UI Components**: shadcn/ui
 - **State Management**: React Context + SWR
 - **Authentication**: JWT with localStorage
 
@@ -34,16 +32,31 @@ A modern, professional Esports tournament management platform built with Next.js
 1. Clone the repository
 2. Install dependencies:
 
-\`\`\`bash
 npm install
 # or
 yarn install
+ Create a `.env.local` file inside the `RCD/` directory (copy from `.env.example`):
 # or
+# Use the built-in mock API (no external backend required)
+NEXT_PUBLIC_DATA_MODE=mock
+
+# Or uncomment to use the real backend server
+# NEXT_PUBLIC_DATA_MODE=real
+# NEXT_PUBLIC_API_URL=http://localhost:3002
+```
 pnpm install
 \`\`\`
 
 3. Set up environment variables:
+ ## API Integration
 
+ The frontend supports two data modes controlled by `NEXT_PUBLIC_DATA_MODE`:
+
+ - `mock`: Uses Next.js App Route handlers with in-memory data (fast iteration, no DB).
+ - `real`: Calls the external `rcd-auth-server` at `NEXT_PUBLIC_API_URL`.
+
+ Auth tokens are stored in `localStorage` (`rcd_token`) and sent via `Authorization: Bearer <token>`.
+ - **Admin**: `/api/admin/*` (mock) or `/api/audit-logs` (real backend audit log endpoint)
 Create a `.env.local` file in the root directory:
 
 \`\`\`env
