@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Play, CheckCircle, Clock } from "lucide-react"
+import React from "react";
 
 interface Match {
   id: number
