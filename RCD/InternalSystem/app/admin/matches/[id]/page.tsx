@@ -51,12 +51,16 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">{match.tournament}</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              {match.tournament}
+            </h1>
             <p className="text-muted-foreground">
               {match.stage} • {match.date} at {match.time}
             </p>
           </div>
-          <Badge className={`${config.bg} ${config.text} border-0`}>{config.label}</Badge>
+          <Badge className={`${config.bg} ${config.text} border-0`}>
+            {config.label}
+          </Badge>
         </div>
       </div>
 
@@ -69,32 +73,43 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
           <div className="flex items-center justify-between py-8">
             <div className="flex-1 text-center">
               <p className="text-muted-foreground text-sm mb-3">Team 1</p>
-              <p className="text-5xl font-bold text-primary mb-3">{match.team1}</p>
-              <p className="text-2xl font-bold text-foreground">{match.score1}</p>
+              <p className="text-5xl font-bold text-primary mb-3">
+                {match.team1}
+              </p>
+              <p className="text-2xl font-bold text-foreground">
+                {match.score1}
+              </p>
             </div>
             <div className="px-8 text-center">
               <p className="text-4xl font-bold text-primary">VS</p>
             </div>
             <div className="flex-1 text-center">
               <p className="text-muted-foreground text-sm mb-3">Team 2</p>
-              <p className="text-5xl font-bold text-primary mb-3">{match.team2}</p>
-              <p className="text-2xl font-bold text-foreground">{match.score2}</p>
+              <p className="text-5xl font-bold text-primary mb-3">
+                {match.team2}
+              </p>
+              <p className="text-2xl font-bold text-foreground">
+                {match.score2}
+              </p>
             </div>
           </div>
 
-          {match.status === "upcoming" && (
+          {String(match.status) === "upcoming" && (
             <div className="flex gap-3 mt-6 pt-6 border-t border-border">
               <Button className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
                 <Play size={18} />
                 Start Match
               </Button>
-              <Button variant="outline" className="flex-1 border-border text-foreground hover:bg-card bg-transparent">
+              <Button
+                variant="outline"
+                className="flex-1 border-border text-foreground hover:bg-card bg-transparent"
+              >
                 Cancel Match
               </Button>
             </div>
           )}
 
-          {match.status === "live" && (
+          {String(match.status) === "live" && (
             <div className="flex gap-3 mt-6 pt-6 border-t border-border">
               <Button className="flex-1 bg-red-600 hover:bg-red-700 text-primary-foreground gap-2">
                 <Pause size={18} />
@@ -118,14 +133,27 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
           <CardContent>
             <div className="space-y-3">
               {match.rounds.map((round) => (
-                <div key={round.round} className="flex items-center justify-between p-3 bg-background rounded-lg">
-                  <p className="text-sm font-medium text-foreground">Round {round.round}</p>
+                <div
+                  key={round.round}
+                  className="flex items-center justify-between p-3 bg-background rounded-lg"
+                >
+                  <p className="text-sm font-medium text-foreground">
+                    Round {round.round}
+                  </p>
                   <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">{match.team1}</span>
-                    <span className="font-bold text-primary">{round.team1}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {match.team1}
+                    </span>
+                    <span className="font-bold text-primary">
+                      {round.team1}
+                    </span>
                     <span className="text-muted-foreground">-</span>
-                    <span className="font-bold text-primary">{round.team2}</span>
-                    <span className="text-sm text-muted-foreground">{match.team2}</span>
+                    <span className="font-bold text-primary">
+                      {round.team2}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {match.team2}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -142,7 +170,10 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
             <CardContent>
               <div className="space-y-2">
                 {match.team1Roster.map((player, idx) => (
-                  <div key={idx} className="p-2 bg-background rounded-lg text-foreground text-sm">
+                  <div
+                    key={idx}
+                    className="p-2 bg-background rounded-lg text-foreground text-sm"
+                  >
                     {player}
                   </div>
                 ))}
@@ -157,7 +188,10 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
             <CardContent>
               <div className="space-y-2">
                 {match.team2Roster.map((player, idx) => (
-                  <div key={idx} className="p-2 bg-background rounded-lg text-foreground text-sm">
+                  <div
+                    key={idx}
+                    className="p-2 bg-background rounded-lg text-foreground text-sm"
+                  >
                     {player}
                   </div>
                 ))}
@@ -167,5 +201,5 @@ export default function MatchDetailPage({ params }: { params: { id: string } }) 
         </div>
       </div>
     </div>
-  )
+  );
 }

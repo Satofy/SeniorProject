@@ -18,23 +18,33 @@ interface Match {
   stage: string
 }
 
+export interface MatchCardProps {
+  match: Match;
+  onStartMatch?: (id: number) => void;
+  onViewDetails?: (id: number) => void;
+}
+
 export function MatchCard({
   match,
   onStartMatch,
   onViewDetails,
-}: {
-  match: Match
-  onStartMatch?: (id: number) => void
-  onViewDetails?: (id: number) => void
-}) {
+}: MatchCardProps) {
   const statusConfig = {
-    upcoming: { color: "bg-blue-500/20 text-blue-400", icon: Clock, label: "Upcoming" },
+    upcoming: {
+      color: "bg-blue-500/20 text-blue-400",
+      icon: Clock,
+      label: "Upcoming",
+    },
     live: { color: "bg-red-500/20 text-red-400", icon: Play, label: "Live" },
-    completed: { color: "bg-green-500/20 text-green-400", icon: CheckCircle, label: "Completed" },
-  }
+    completed: {
+      color: "bg-green-500/20 text-green-400",
+      icon: CheckCircle,
+      label: "Completed",
+    },
+  };
 
-  const config = statusConfig[match.status]
-  const StatusIcon = config.icon
+  const config = statusConfig[match.status];
+  const StatusIcon = config.icon;
 
   return (
     <Card className="border-border bg-card hover:bg-card/80 transition-colors">
@@ -92,5 +102,5 @@ export function MatchCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

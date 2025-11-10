@@ -2,9 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+import type { StageFormData } from "./stage-step-one";
+
 interface StageStepTwoProps {
-  formData: any
-  setFormData: (data: any) => void
+  formData: StageFormData;
+  setFormData: (data: StageFormData) => void;
 }
 
 const formats = [

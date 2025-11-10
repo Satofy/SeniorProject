@@ -35,16 +35,23 @@ export interface Team {
   gamesPlayed?: number;
   createdAt?: string;
   games?: string[];
-  pendingRequests?: number;
+  // Unify shape with esports-rcd-frontend: store full request objects instead of just a count
+  pendingRequests?: Array<{
+    id: string;
+    userId: string;
+    user?: { id: string; email?: string; username?: string };
+    message?: string;
+    createdAt: string;
+  }>;
 }
 
 export interface JoinRequest {
-  id: string
-  userId: string
-  teamId: string
-  status: "pending" | "approved" | "declined"
-  createdAt: string
-  user?: User
+  id: string;
+  userId: string;
+  teamId: string;
+  status: "pending" | "approved" | "declined";
+  createdAt: string;
+  user?: User;
 }
 
 class ApiClient {
@@ -210,10 +217,19 @@ class ApiClient {
     return this.request<Team>(`/api/teams/${id}`);
   }
 
-  async createTeam(name: string, tag?: string) {
+  async createTeam(
+    name: string,
+    tag?: string,
+    games?: string[],
+    social?: { discord?: string; twitter?: string; twitch?: string }
+  ) {
+    const body: Record<string, any> = { name };
+    if (tag) body.tag = tag;
+    if (games && games.length) body.games = games;
+    if (social) body.social = social;
     return this.request<Team>("/api/teams", {
       method: "POST",
-      body: JSON.stringify({ name, tag }),
+      body: JSON.stringify(body),
     });
   }
 

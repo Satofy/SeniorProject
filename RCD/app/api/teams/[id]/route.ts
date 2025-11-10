@@ -4,9 +4,10 @@ import { getTeam } from "../../_mockData"
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const team = getTeam(params.id);
+  const { id } = await context.params;
+  const team = getTeam(id);
   if (!team)
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(team);

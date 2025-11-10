@@ -4,9 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+export interface StageFormData {
+  stageName: string;
+  participants: string;
+  groups: string;
+  qualifiers: string;
+  formatType: string;
+}
+
 interface StageStepOneProps {
-  formData: any
-  setFormData: (data: any) => void
+  formData: StageFormData;
+  setFormData: (data: StageFormData) => void;
 }
 
 export function StageStepOne({ formData, setFormData }: StageStepOneProps) {

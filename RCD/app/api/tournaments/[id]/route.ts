@@ -8,38 +8,42 @@ import {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const t = getTournament(params.id);
+  const { id } = await context.params;
+  const t = getTournament(id);
   if (!t) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(t);
 }
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const body = await req.json().catch(() => ({}));
-  const t = updateTournament(params.id, body);
+  const { id } = await context.params;
+  const t = updateTournament(id, body);
   if (!t) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(t);
 }
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const body = await req.json().catch(() => ({}));
-  const t = updateTournament(params.id, body);
+  const { id } = await context.params;
+  const t = updateTournament(id, body);
   if (!t) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(t);
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const ok = removeTournament(params.id);
+  const { id } = await context.params;
+  const ok = removeTournament(id);
   if (!ok) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json({ success: true });
 }

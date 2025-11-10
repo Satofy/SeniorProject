@@ -3,26 +3,32 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Edit2, Settings } from "lucide-react"
 
-interface Tournament {
-  id: number
-  name: string
-  game: string
-  partner: string
-  participants: number
-  teams: number
-  format: string
-  prizePool: number
-  published: boolean
-  status: string
+export interface AdminTournamentCardData {
+  id: number;
+  name: string;
+  game: string;
+  partner: string;
+  participants: number;
+  teams: number;
+  format: string;
+  prizePool: number;
+  published: boolean;
+  status: string;
 }
 
-export function TournamentCard({ tournament }: { tournament: Tournament }) {
+export interface TournamentCardProps {
+  tournament: AdminTournamentCardData;
+}
+
+export function TournamentCard({ tournament }: TournamentCardProps) {
   return (
     <Card className="border-border bg-card hover:bg-card/80 transition-colors cursor-pointer">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h3 className="font-bold text-lg text-foreground mb-1">{tournament.name}</h3>
+            <h3 className="font-bold text-lg text-foreground mb-1">
+              {tournament.name}
+            </h3>
             <p className="text-sm text-muted-foreground">{tournament.game}</p>
           </div>
           <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center">
@@ -39,11 +45,15 @@ export function TournamentCard({ tournament }: { tournament: Tournament }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Partner</p>
-            <p className="font-semibold text-foreground">{tournament.partner}</p>
+            <p className="font-semibold text-foreground">
+              {tournament.partner}
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Participants</p>
-            <p className="font-semibold text-foreground">0/{tournament.participants}</p>
+            <p className="font-semibold text-foreground">
+              0/{tournament.participants}
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Teams</p>
@@ -55,7 +65,9 @@ export function TournamentCard({ tournament }: { tournament: Tournament }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Prize Pool</p>
-            <p className="font-semibold text-foreground">${(tournament.prizePool / 1000).toFixed(0)}K</p>
+            <p className="font-semibold text-foreground">
+              ${(tournament.prizePool / 1000).toFixed(0)}K
+            </p>
           </div>
         </div>
 
@@ -76,5 +88,5 @@ export function TournamentCard({ tournament }: { tournament: Tournament }) {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

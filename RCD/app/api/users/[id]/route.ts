@@ -4,9 +4,10 @@ import { users, setUserRole, deleteUser } from "../../_mockData";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const user = users.find((u) => u.id === params.id);
+  const { id } = await context.params;
+  const user = users.find((u) => u.id === id);
   if (!user)
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(user);
@@ -14,11 +15,12 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
   const body = await req.json().catch(() => ({}));
   if (body?.role) {
-    const ok = setUserRole(params.id, body.role);
+    const ok = setUserRole(id, body.role);
     if (!ok)
       return NextResponse.json({ message: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true });
@@ -28,9 +30,10 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const ok = deleteUser(params.id);
+  const { id } = await context.params;
+  const ok = deleteUser(id);
   if (!ok) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json({ success: true });
 }

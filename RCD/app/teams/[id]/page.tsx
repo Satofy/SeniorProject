@@ -12,7 +12,8 @@ import { ArrowLeft, Shield, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 
 export default function TeamDetailPage() {
-  const params = useParams()
+  const rawParams = useParams();
+  const id = (rawParams as any)?.id as string | undefined;
   const router = useRouter()
   const { user, isPlayer } = useAuth()
   const [team, setTeam] = useState<Team | null>(null)
@@ -22,18 +23,19 @@ export default function TeamDetailPage() {
   useEffect(() => {
     const fetchTeam = async () => {
       try {
-        const data = await api.getTeam(params.id as string)
-        setTeam(data)
+        if (!id) return;
+        const data = await api.getTeam(id);
+        setTeam(data);
       } catch (error) {
-        toast.error("Failed to load team")
-        router.push("/teams")
+        toast.error("Failed to load team");
+        router.push("/teams");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchTeam()
-  }, [params.id, router])
+    fetchTeam();
+  }, [id, router]);
 
   const handleRequestToJoin = async () => {
     if (!user) {
@@ -43,7 +45,8 @@ export default function TeamDetailPage() {
 
     setRequesting(true)
     try {
-      await api.requestToJoinTeam(params.id as string)
+  if (!id) return;
+  await api.requestToJoinTeam(id);
       toast.success("Join request sent successfully!")
     } catch (error: any) {
       toast.error(error.message || "Failed to send join request")

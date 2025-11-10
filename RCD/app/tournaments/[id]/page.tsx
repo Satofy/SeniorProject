@@ -21,7 +21,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function TournamentDetailPage() {
-  const params = useParams()
+  const rawParams = useParams();
+  const id = (rawParams as any)?.id as string | undefined;
   const router = useRouter()
   const { user, isTeamManager, isPlayer } = useAuth()
   const [tournament, setTournament] = useState<Tournament | null>(null)
@@ -33,18 +34,19 @@ export default function TournamentDetailPage() {
   useEffect(() => {
     const fetchTournament = async () => {
       try {
-        const data = await api.getTournament(params.id as string)
-        setTournament(data)
+        if (!id) return;
+        const data = await api.getTournament(id);
+        setTournament(data);
       } catch (error) {
-        toast.error("Failed to load tournament")
-        router.push("/tournaments")
+        toast.error("Failed to load tournament");
+        router.push("/tournaments");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchTournament()
-  }, [params.id, router])
+    fetchTournament();
+  }, [id, router]);
 
   const handleRegister = async () => {
     if (!user) {
@@ -59,7 +61,11 @@ export default function TournamentDetailPage() {
 
     setRegistering(true)
     try {
-      await api.registerForTournament(params.id as string, isTeamManager ? selectedTeamId : undefined)
+  if (!id) return;
+  await api.registerForTournament(
+    id,
+    isTeamManager ? selectedTeamId : undefined
+  );
       toast.success("Successfully registered for tournament!")
       setShowRegisterDialog(false)
     } catch (error: any) {
