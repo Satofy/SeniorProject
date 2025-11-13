@@ -495,6 +495,7 @@ export function reportMatch(tournamentId: string, matchId: string, score1?: numb
   propagateWinnerWinners(b, m)
   propagateLoser(b, m)
   // Check grand final auto populate second participant from losers champion later (not implemented)
+  log("system", "report_match", `Match ${m.id} reported: ${m.team1Id ?? 'TBD'} ${m.score1 ?? ''} - ${m.score2 ?? ''} ${m.team2Id ?? 'TBD'}; winner ${m.winnerId}`)
   broadcastBracket(tournamentId)
   return m
 }
@@ -525,6 +526,7 @@ export function resetMatch(tournamentId: string, matchId: string) {
   m.winnerId = undefined
   m.status = "pending"
   m.completedAt = undefined
+  log("system", "reset_match", `Match ${m.id} reset`)
   broadcastBracket(tournamentId)
   return m
 }

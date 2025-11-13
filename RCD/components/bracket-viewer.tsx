@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, type Bracket, type Match } from "@/lib/api";
+import { api, type Bracket, type Match, type Team } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 interface BracketViewerProps {
@@ -17,6 +18,7 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
   const score1Ref = useRef<HTMLInputElement | null>(null);
   const score2Ref = useRef<HTMLInputElement | null>(null);
+  const [teamsById, setTeamsById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     // fetch latest bracket if not provided
@@ -28,6 +30,20 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
     });
     return () => es.close();
   }, [tournamentId]);
+
+  // fetch teams once to show names
+  useEffect(() => {
+    api.getTeams().then((all: Team[]) => {
+      const map: Record<string, string> = {};
+      all.forEach(t => { map[t.id] = t.name; });
+      setTeamsById(map);
+    }).catch(() => {});
+  }, []);
+
+  const nameFor = (teamId?: string | null) => {
+    if (!teamId) return "TBD";
+    return teamsById[teamId] || teamId;
+  };
 
   const beginReport = (m: Match) => {
     if (!isAdmin) return;
@@ -51,6 +67,15 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
     }
   };
 
+  const resetMatch = async (m: Match) => {
+    try {
+      await api.resetMatch(tournamentId, m.id);
+      toast.success("Match reset");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to reset");
+    }
+  };
+
   if (!bracket) return <div className="text-sm text-muted-foreground">No bracket yet.</div>;
 
   return (
@@ -69,23 +94,28 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                         key={m.id}
                         className={`border rounded p-3 bg-card/60 relative ${m.status === "completed" ? "opacity-70" : ""}`}
                       >
-                        <div className="text-xs text-muted-foreground mb-1">Match {m.index + 1}</div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                          <span>Match {m.index + 1}</span>
+                          <Badge variant={m.status === "completed" ? "secondary" : "outline"}>
+                            {m.status === "completed" ? "Completed" : "Pending"}
+                          </Badge>
+                        </div>
                         <div className="flex flex-col gap-1">
                           <div className="flex justify-between">
-                            <span>{m.team1Id || "TBD"}</span>
+                            <span>{nameFor(m.team1Id)}</span>
                             {typeof m.score1 === "number" && (
                               <span className="text-xs">{m.score1}</span>
                             )}
                           </div>
                           <div className="flex justify-between">
-                            <span>{m.team2Id || "TBD"}</span>
+                            <span>{nameFor(m.team2Id)}</span>
                             {typeof m.score2 === "number" && (
                               <span className="text-xs">{m.score2}</span>
                             )}
                           </div>
                         </div>
                         {m.winnerId && (
-                          <div className="text-xs text-primary mt-2">Winner: {m.winnerId}</div>
+                          <div className="text-xs text-primary mt-2">Winner: {nameFor(m.winnerId)}</div>
                         )}
                         {isAdmin && m.status !== "completed" && (m.team1Id || m.team2Id) && (
                           <Button
@@ -95,6 +125,16 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                             onClick={() => beginReport(m)}
                           >
                             Report
+                          </Button>
+                        )}
+                        {isAdmin && m.status === "completed" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="mt-2 w-full"
+                            onClick={() => resetMatch(m)}
+                          >
+                            Reset
                           </Button>
                         )}
                       </div>
