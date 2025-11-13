@@ -46,6 +46,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
 export function useNotifications() {
   const ctx = useContext(NotificationsContext)
-  if (!ctx) throw new Error('useNotifications must be used within NotificationsProvider')
-  return ctx
+  if (ctx) return ctx;
+  // Fallback no-op context to avoid hard crashes if provider isn't mounted yet
+  return {
+    notifications: [],
+    unreadCount: 0,
+    dismiss: () => {},
+    refresh: async () => {},
+    clearAll: () => {},
+    addNotification: () => {},
+  };
 }

@@ -20,6 +20,22 @@ A modern, professional Esports tournament management platform built with Next.js
 - **State Management**: React Context + SWR
 - **Authentication**: JWT with localStorage
 
+## Dev tips (avoid "old system" boot)
+
+- Leave `NEXT_PUBLIC_API_URL` empty in `.env.local` to use the built-in Next.js API routes. This avoids CORS and
+	prevents pointing at an older/different backend accidentally.
+- If you really need to point to another backend, set `NEXT_PUBLIC_API_URL` to that URL and expect cross-origin
+	behavior and possibly different data shapes.
+- If the UI looks "old" (missing theme toggle or admin bits), clear the cache and restart:
+	- Delete `.next/` then run `npm run dev` inside `RCD/`.
+	- Ensure you are opening the port this app bound to (usually 3000, otherwise the log prints the used port).
+
+## Dark/Light mode
+
+- The app uses `next-themes` with the class strategy. The `ThemeProvider` is wired in `app/layout.tsx` and the toggle
+	button lives in `components/navbar.tsx`.
+- Tailwind v4 CSS variables are defined in `app/globals.css` for both light `:root` and `.dark`.
+
 ## Getting Started
 
 ### Prerequisites
