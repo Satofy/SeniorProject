@@ -57,6 +57,7 @@ export type Match = {
   winnerId?: string
   scheduledAt?: string
   completedAt?: string
+  status?: "pending" | "completed"
 }
 
 export type Bracket = {
@@ -123,6 +124,23 @@ export const tournaments: MockTournament[] = [
 // Storage for registrations and brackets
 export const registrations: Registration[] = []
 export const brackets: Record<string, Bracket> = {}
+// subscribers for SSE style updates
+export const bracketSubscribers: Record<string, Set<(b: Bracket) => void>> = {}
+
+function broadcastBracket(tournamentId: string) {
+  const b = brackets[tournamentId]
+  if (!b) return
+  const subs = bracketSubscribers[tournamentId]
+  subs?.forEach((fn) => {
+    try { fn(b) } catch {}
+  })
+}
+
+export function subscribeBracket(tournamentId: string, fn: (b: Bracket) => void) {
+  if (!bracketSubscribers[tournamentId]) bracketSubscribers[tournamentId] = new Set()
+  bracketSubscribers[tournamentId].add(fn)
+  return () => bracketSubscribers[tournamentId].delete(fn)
+}
 
 // Simple audit log storage
 export type AuditLog = {
@@ -346,6 +364,9 @@ export function generateSingleElimBracket(tournamentId: string, teamIds: string[
     },
   }
   brackets[tournamentId] = bracket
+  // initialize status
+  bracket.rounds.winners.forEach(r => r.matches.forEach(m => { if (!m.winnerId) m.status = "pending"; else m.status = "completed" }))
+  broadcastBracket(tournamentId)
   return bracket
 }
 
@@ -379,9 +400,131 @@ export function generateDoubleElimBracket(tournamentId: string, teamIds: string[
     rounds: { winners, losers, grand },
   }
   brackets[tournamentId] = bracket
+  bracket.rounds.winners.forEach(r => r.matches.forEach(m => { if (!m.winnerId) m.status = "pending"; else m.status = "completed" }))
+  bracket.rounds.losers.forEach(r => r.matches.forEach(m => { m.status = "pending" }))
+  bracket.rounds.grand.forEach(r => r.matches.forEach(m => { m.status = "pending" }))
+  broadcastBracket(tournamentId)
   return bracket
 }
 
 export function getBracket(tournamentId: string) {
   return brackets[tournamentId] || null
+}
+
+// Helper to find match
+function findMatch(tournamentId: string, matchId: string): Match | null {
+  const b = brackets[tournamentId]
+  if (!b) return null
+  for (const side of ["winners","losers","grand"] as BracketSide[]) {
+    for (const round of b.rounds[side]) {
+      const m = round.matches.find(x => x.id === matchId)
+      if (m) return m
+    }
+  }
+  return null
+}
+
+// Propagate winner in single or winners side of double
+function propagateWinnerWinners(bracket: Bracket, match: Match) {
+  if (!match.winnerId) return
+  if (match.side !== "winners") return
+  // last round? then may populate grand final for double
+  const winnersRounds = bracket.rounds.winners
+  const round = winnersRounds.find(r => r.round === match.round)
+  if (!round) return
+  const isLastRound = match.round === winnersRounds[winnersRounds.length - 1].round
+  if (isLastRound) {
+    if (bracket.kind === "double") {
+      // put winner into grand final match team1 if empty
+      const grand = bracket.rounds.grand[0]?.matches[0]
+      if (grand && !grand.team1Id) { grand.team1Id = match.winnerId }
+    }
+    return
+  }
+  const nextRound = winnersRounds.find(r => r.round === match.round + 1)
+  if (!nextRound) return
+  const targetIndex = Math.floor(match.index / 2)
+  const targetMatch = nextRound.matches[targetIndex]
+  if (!targetMatch) return
+  if (match.index % 2 === 0) {
+    if (!targetMatch.team1Id) targetMatch.team1Id = match.winnerId
+  } else {
+    if (!targetMatch.team2Id) targetMatch.team2Id = match.winnerId
+  }
+}
+
+// Place loser into losers bracket (simplified)
+function propagateLoser(bracket: Bracket, match: Match) {
+  if (bracket.kind !== "double") return
+  if (!match.winnerId) return
+  if (match.side !== "winners") return // only from winners side for now
+  const loserId = match.team1Id && match.team2Id ? (match.winnerId === match.team1Id ? match.team2Id : match.team1Id) : null
+  if (!loserId) return
+  // find first losers match with free slot
+  for (const round of bracket.rounds.losers) {
+    for (const m of round.matches) {
+      if (!m.team1Id) { m.team1Id = loserId; return }
+      if (!m.team2Id) { m.team2Id = loserId; return }
+    }
+  }
+}
+
+export function reportMatch(tournamentId: string, matchId: string, score1?: number, score2?: number, winnerOverride?: string) {
+  const b = brackets[tournamentId]
+  if (!b) throw new Error("Bracket not found")
+  const m = findMatch(tournamentId, matchId)
+  if (!m) throw new Error("Match not found")
+  if (m.status === "completed") throw new Error("Match already completed")
+  if (!m.team1Id && !m.team2Id) throw new Error("Match has no participants")
+  if (typeof winnerOverride === "string") {
+    m.winnerId = winnerOverride
+  } else if (typeof score1 === "number" && typeof score2 === "number") {
+    m.score1 = score1
+    m.score2 = score2
+    if (m.team1Id && m.team2Id) {
+      m.winnerId = score1 === score2 ? m.team1Id : (score1 > score2 ? m.team1Id! : m.team2Id!)
+    } else {
+      // bye scenario
+      m.winnerId = m.team1Id || m.team2Id || undefined
+    }
+  } else {
+    throw new Error("Provide scores or a winner override")
+  }
+  m.status = "completed"
+  m.completedAt = new Date().toISOString()
+  propagateWinnerWinners(b, m)
+  propagateLoser(b, m)
+  // Check grand final auto populate second participant from losers champion later (not implemented)
+  broadcastBracket(tournamentId)
+  return m
+}
+
+export function resetMatch(tournamentId: string, matchId: string) {
+  const b = brackets[tournamentId]
+  if (!b) throw new Error("Bracket not found")
+  const m = findMatch(tournamentId, matchId)
+  if (!m) throw new Error("Match not found")
+  // removing downstream propagation is complex – for senior project we disallow reset if propagated
+  if (m.status === "completed") {
+    // naive check: if its winner appears in later round slot, block reset
+    const winnerId = m.winnerId
+    if (winnerId) {
+      for (const side of ["winners","losers","grand"] as BracketSide[]) {
+        for (const round of b.rounds[side]) {
+          for (const child of round.matches) {
+            if (child !== m && (child.team1Id === winnerId || child.team2Id === winnerId)) {
+              throw new Error("Cannot reset: winner already propagated")
+            }
+          }
+        }
+      }
+    }
+  }
+  m.score1 = undefined
+  m.score2 = undefined
+  m.winnerId = undefined
+  m.status = "pending"
+  m.completedAt = undefined
+  broadcastBracket(tournamentId)
+  return m
 }

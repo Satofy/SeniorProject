@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { api, type Tournament, type Bracket, type Match } from "@/lib/api";
+import { api, type Tournament, type Bracket } from "@/lib/api";
+import { BracketViewer } from "@/components/bracket-viewer";
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,6 +34,17 @@ export default function TournamentDetailPage() {
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [starting, setStarting] = useState(false);
   const [format, setFormat] = useState<"single" | "double">("single");
+  const [managerTeams, setManagerTeams] = useState<Array<{id:string; name:string}>>([]);
+
+  // Load teams for team manager picker
+  useEffect(() => {
+    if (user && isTeamManager) {
+      api.getTeams().then(all => {
+        const owned = all.filter(t => t.managerId === user.id).map(t => ({ id: t.id, name: t.name }));
+        setManagerTeams(owned);
+      }).catch(() => {});
+    }
+  }, [user, isTeamManager]);
 
   useEffect(() => {
     const fetchTournament = async () => {
@@ -213,81 +225,16 @@ export default function TournamentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Bracket Section */}
+          {/* Bracket Section (live viewer) */}
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle>Bracket</CardTitle>
               <CardDescription>
-                {bracket
-                  ? `${bracket.kind} elimination`
-                  : "Bracket will appear after the tournament starts"}
+                {bracket ? `${bracket.kind} elimination` : "Bracket will appear after the tournament starts"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {bracket ? (
-                <div className="overflow-x-auto">
-                  {(["winners", "losers", "grand"] as const).map((side) =>
-                    bracket.rounds[side] && bracket.rounds[side].length > 0 ? (
-                      <div key={side} className="mb-8">
-                        <h4 className="font-semibold capitalize mb-3">
-                          {side} bracket
-                        </h4>
-                        <div className="flex gap-6">
-                          {bracket.rounds[side].map((r) => (
-                            <div
-                              key={`${side}-r${r.round}`}
-                              className="min-w-[220px]"
-                            >
-                              <div className="text-sm text-muted-foreground mb-2">
-                                Round {r.round}
-                              </div>
-                              <div className="space-y-3">
-                                {r.matches.map((m) => (
-                                  <div
-                                    key={m.id}
-                                    className="border rounded p-3 bg-card/60"
-                                  >
-                                    <div className="text-xs text-muted-foreground mb-1">
-                                      Match {m.index + 1}
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                      <div className="flex justify-between">
-                                        <span>{m.team1Id || "TBD"}</span>
-                                        {typeof m.score1 === "number" && (
-                                          <span className="text-xs">
-                                            {m.score1}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span>{m.team2Id || "TBD"}</span>
-                                        {typeof m.score2 === "number" && (
-                                          <span className="text-xs">
-                                            {m.score2}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {m.winnerId && (
-                                      <div className="text-xs text-primary mt-2">
-                                        Winner: {m.winnerId}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  No bracket yet.
-                </div>
-              )}
+              <BracketViewer tournamentId={id!} initial={bracket} isAdmin={user?.role === "admin"} />
             </CardContent>
           </Card>
         </div>
@@ -415,7 +362,12 @@ export default function TournamentDetailPage() {
                   <SelectValue placeholder="Select your team" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="team-1">Your Team Name</SelectItem>
+                  {managerTeams.length === 0 && (
+                    <SelectItem value="" disabled>No teams found</SelectItem>
+                  )}
+                  {managerTeams.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-2">

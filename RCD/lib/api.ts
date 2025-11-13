@@ -41,6 +41,7 @@ export interface Match {
   winnerId?: string;
   scheduledAt?: string;
   completedAt?: string;
+  status?: "pending" | "completed";
 }
 
 export interface Bracket {
@@ -249,6 +250,48 @@ class ApiClient {
 
   async getBracket(tournamentId: string) {
     return this.request<Bracket>(`/api/tournaments/${tournamentId}/bracket`);
+  }
+
+  // Match endpoints
+  async reportMatch(
+    tournamentId: string,
+    matchId: string,
+    score1?: number,
+    score2?: number,
+    winnerIdOverride?: string
+  ) {
+    const body: Record<string, any> = {};
+    if (typeof winnerIdOverride === "string") body.winnerId = winnerIdOverride;
+    if (typeof score1 === "number") body.score1 = score1;
+    if (typeof score2 === "number") body.score2 = score2;
+    return this.request<Match>(
+      `/api/tournaments/${tournamentId}/matches/${matchId}/report`,
+      { method: "POST", body: JSON.stringify(body) }
+    );
+  }
+
+  async resetMatch(tournamentId: string, matchId: string) {
+    return this.request<Match>(
+      `/api/tournaments/${tournamentId}/matches/${matchId}/reset`,
+      { method: "POST" }
+    );
+  }
+
+  subscribeBracket(
+    tournamentId: string,
+    onUpdate: (bracket: Bracket) => void
+  ): EventSource {
+    const es = new EventSource(
+      `${DATA_MODE === "real" ? API_BASE : ""}/api/tournaments/${tournamentId}/bracket/stream`
+    );
+    const handler = (ev: MessageEvent) => {
+      try {
+        const data = JSON.parse(ev.data);
+        onUpdate(data);
+      } catch {}
+    };
+    es.addEventListener("bracket", handler);
+    return es;
   }
 
   async deleteTournament(id: string) {
