@@ -25,6 +25,38 @@ export interface Tournament {
   game?: string
 }
 
+export type BracketSide = "winners" | "losers" | "grand";
+export type BracketKind = "single" | "double";
+
+export interface Match {
+  id: string;
+  tournamentId: string;
+  side: BracketSide;
+  round: number;
+  index: number;
+  team1Id?: string | null;
+  team2Id?: string | null;
+  score1?: number;
+  score2?: number;
+  winnerId?: string;
+  scheduledAt?: string;
+  completedAt?: string;
+}
+
+export interface Bracket {
+  tournamentId: string;
+  kind: BracketKind;
+  rounds: Record<BracketSide, Array<{ round: number; matches: Match[] }>>;
+}
+
+export interface Registration {
+  id: string;
+  tournamentId: string;
+  teamId: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -200,6 +232,23 @@ class ApiClient {
       body: JSON.stringify(data),
     });
     return this.normalizeTournament(t);
+  }
+
+  async listRegistrations(tournamentId: string) {
+    return this.request<Registration[]>(
+      `/api/tournaments/${tournamentId}/registrations`
+    );
+  }
+
+  async startTournament(tournamentId: string, format?: BracketKind) {
+    return this.request<Bracket>(`/api/tournaments/${tournamentId}/start`, {
+      method: "POST",
+      body: JSON.stringify(format ? { format } : {}),
+    });
+  }
+
+  async getBracket(tournamentId: string) {
+    return this.request<Bracket>(`/api/tournaments/${tournamentId}/bracket`);
   }
 
   async deleteTournament(id: string) {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { api, type Tournament } from "@/lib/api"
+import { api, type Tournament, type Bracket, type Match } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +30,9 @@ export default function TournamentDetailPage() {
   const [registering, setRegistering] = useState(false)
   const [showRegisterDialog, setShowRegisterDialog] = useState(false)
   const [selectedTeamId, setSelectedTeamId] = useState<string>("")
+  const [bracket, setBracket] = useState<Bracket | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [format, setFormat] = useState<"single" | "double">("single");
 
   useEffect(() => {
     const fetchTournament = async () => {
@@ -37,6 +40,13 @@ export default function TournamentDetailPage() {
         if (!id) return;
         const data = await api.getTournament(id);
         setTournament(data);
+        // attempt to fetch bracket if ongoing or after generation
+        try {
+          const b = await api.getBracket(id);
+          setBracket(b);
+        } catch {
+          setBracket(null);
+        }
       } catch (error) {
         toast.error("Failed to load tournament");
         router.push("/tournaments");
@@ -74,6 +84,23 @@ export default function TournamentDetailPage() {
       setRegistering(false)
     }
   }
+
+  const handleStart = async () => {
+    if (!id) return;
+    setStarting(true);
+    try {
+      const b = await api.startTournament(id, format);
+      setBracket(b);
+      toast.success(`Tournament started with ${b.kind} elimination`);
+      // refresh tournament status
+      const data = await api.getTournament(id);
+      setTournament(data);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to start tournament");
+    } finally {
+      setStarting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -114,8 +141,8 @@ export default function TournamentDetailPage() {
                     tournament.status === "upcoming"
                       ? "default"
                       : tournament.status === "ongoing"
-                        ? "secondary"
-                        : "outline"
+                      ? "secondary"
+                      : "outline"
                   }
                   className="text-sm"
                 >
@@ -154,9 +181,12 @@ export default function TournamentDetailPage() {
                   <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
                     <Users className="w-5 h-5 text-primary" />
                     <div>
-                      <p className="text-sm text-muted-foreground">Participants</p>
+                      <p className="text-sm text-muted-foreground">
+                        Participants
+                      </p>
                       <p className="font-semibold">
-                        {tournament.currentParticipants || 0} / {tournament.maxParticipants}
+                        {tournament.currentParticipants || 0} /{" "}
+                        {tournament.maxParticipants}
                       </p>
                     </div>
                   </div>
@@ -165,7 +195,9 @@ export default function TournamentDetailPage() {
                   <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
                     <DollarSign className="w-5 h-5 text-primary" />
                     <div>
-                      <p className="text-sm text-muted-foreground">Prize Pool</p>
+                      <p className="text-sm text-muted-foreground">
+                        Prize Pool
+                      </p>
                       <p className="font-semibold">{tournament.prizePool}</p>
                     </div>
                   </div>
@@ -180,6 +212,84 @@ export default function TournamentDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Bracket Section */}
+          <Card className="border-primary/20">
+            <CardHeader>
+              <CardTitle>Bracket</CardTitle>
+              <CardDescription>
+                {bracket
+                  ? `${bracket.kind} elimination`
+                  : "Bracket will appear after the tournament starts"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {bracket ? (
+                <div className="overflow-x-auto">
+                  {(["winners", "losers", "grand"] as const).map((side) =>
+                    bracket.rounds[side] && bracket.rounds[side].length > 0 ? (
+                      <div key={side} className="mb-8">
+                        <h4 className="font-semibold capitalize mb-3">
+                          {side} bracket
+                        </h4>
+                        <div className="flex gap-6">
+                          {bracket.rounds[side].map((r) => (
+                            <div
+                              key={`${side}-r${r.round}`}
+                              className="min-w-[220px]"
+                            >
+                              <div className="text-sm text-muted-foreground mb-2">
+                                Round {r.round}
+                              </div>
+                              <div className="space-y-3">
+                                {r.matches.map((m) => (
+                                  <div
+                                    key={m.id}
+                                    className="border rounded p-3 bg-card/60"
+                                  >
+                                    <div className="text-xs text-muted-foreground mb-1">
+                                      Match {m.index + 1}
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex justify-between">
+                                        <span>{m.team1Id || "TBD"}</span>
+                                        {typeof m.score1 === "number" && (
+                                          <span className="text-xs">
+                                            {m.score1}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>{m.team2Id || "TBD"}</span>
+                                        {typeof m.score2 === "number" && (
+                                          <span className="text-xs">
+                                            {m.score2}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {m.winnerId && (
+                                      <div className="text-xs text-primary mt-2">
+                                        Winner: {m.winnerId}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No bracket yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -192,19 +302,28 @@ export default function TournamentDetailPage() {
               {user ? (
                 <>
                   {tournament.status === "upcoming" ? (
-                    <Button onClick={() => setShowRegisterDialog(true)} className="w-full" size="lg">
+                    <Button
+                      onClick={() => setShowRegisterDialog(true)}
+                      className="w-full"
+                      size="lg"
+                    >
                       <Trophy className="w-4 h-4 mr-2" />
                       Register Now
                     </Button>
                   ) : (
                     <p className="text-sm text-muted-foreground text-center">
-                      Registration is {tournament.status === "ongoing" ? "closed" : "not available"}
+                      Registration is{" "}
+                      {tournament.status === "ongoing"
+                        ? "closed"
+                        : "not available"}
                     </p>
                   )}
                 </>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground text-center">Sign in to register for this tournament</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Sign in to register for this tournament
+                  </p>
                   <Button asChild className="w-full" size="lg">
                     <a href="/login">Sign In</a>
                   </Button>
@@ -213,6 +332,42 @@ export default function TournamentDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Admin Controls */}
+          {user && user.role === "admin" && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle>Admin Controls</CardTitle>
+                <CardDescription>
+                  Start the tournament and generate the bracket
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm">Format</div>
+                <div className="flex gap-2">
+                  <Button
+                    variant={format === "single" ? "default" : "outline"}
+                    onClick={() => setFormat("single")}
+                  >
+                    Single Elim
+                  </Button>
+                  <Button
+                    variant={format === "double" ? "default" : "outline"}
+                    onClick={() => setFormat("double")}
+                  >
+                    Double Elim
+                  </Button>
+                </div>
+                <Button
+                  className="w-full mt-2"
+                  onClick={handleStart}
+                  disabled={starting || tournament.status !== "upcoming"}
+                >
+                  {starting ? "Starting..." : "Start Tournament"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle>Tournament Info</CardTitle>
@@ -220,7 +375,9 @@ export default function TournamentDetailPage() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status</span>
-                <span className="font-medium capitalize">{tournament.status}</span>
+                <span className="font-medium capitalize">
+                  {tournament.status}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Format</span>
@@ -230,7 +387,8 @@ export default function TournamentDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Slots Available</span>
                   <span className="font-medium">
-                    {tournament.maxParticipants - (tournament.currentParticipants || 0)}
+                    {tournament.maxParticipants -
+                      (tournament.currentParticipants || 0)}
                   </span>
                 </div>
               )}
@@ -266,7 +424,10 @@ export default function TournamentDetailPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRegisterDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowRegisterDialog(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleRegister} disabled={registering}>
@@ -276,5 +437,5 @@ export default function TournamentDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

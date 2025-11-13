@@ -31,6 +31,40 @@ export type MockTournament = {
   game?: string
 }
 
+// Registrations
+export type Registration = {
+  id: string
+  tournamentId: string
+  teamId: string
+  status: "pending" | "approved" | "rejected"
+  createdAt: string
+}
+
+// Bracket/Match models
+export type BracketKind = "single" | "double"
+export type BracketSide = "winners" | "losers" | "grand"
+
+export type Match = {
+  id: string
+  tournamentId: string
+  side: BracketSide
+  round: number
+  index: number // position within round
+  team1Id?: string | null
+  team2Id?: string | null
+  score1?: number
+  score2?: number
+  winnerId?: string
+  scheduledAt?: string
+  completedAt?: string
+}
+
+export type Bracket = {
+  tournamentId: string
+  kind: BracketKind
+  rounds: Record<BracketSide, Array<{ round: number; matches: Match[] }>>
+}
+
 let counter = 1000
 const newid = () => String(counter++)
 
@@ -85,6 +119,10 @@ export const tournaments: MockTournament[] = [
   { id: "a1", title: "Autumn Cup", date: new Date().toISOString(), type: "5v5", status: "upcoming", maxParticipants: 32, currentParticipants: 10, game: "Valorant" },
   { id: "a2", title: "Winter Clash", date: new Date().toISOString(), type: "Solo", status: "ongoing", maxParticipants: 16, currentParticipants: 8, game: "League of Legends" },
 ]
+
+// Storage for registrations and brackets
+export const registrations: Registration[] = []
+export const brackets: Record<string, Bracket> = {}
 
 // Simple audit log storage
 export type AuditLog = {
@@ -213,4 +251,137 @@ export function registerForTournament(id: string) {
   t.currentParticipants = (t.currentParticipants || 0) + 1
   log("system", "register_tournament", `Registration added to ${t.title} (${t.id})`)
   return true
+}
+
+// New registration APIs (team-based)
+export function createRegistration(tournamentId: string, teamId: string) {
+  const t = getTournament(tournamentId)
+  if (!t) throw new Error("Tournament not found")
+  // prevent duplicates
+  const dup = registrations.find((r) => r.tournamentId === tournamentId && r.teamId === teamId && r.status !== "rejected")
+  if (dup) throw new Error("Team already registered")
+  if (t.maxParticipants && (t.currentParticipants || 0) >= t.maxParticipants) throw new Error("Tournament is full")
+  const r: Registration = {
+    id: `reg${newid()}`,
+    tournamentId,
+    teamId,
+    status: "approved", // auto-approve for now
+    createdAt: new Date().toISOString(),
+  }
+  registrations.push(r)
+  t.currentParticipants = (t.currentParticipants || 0) + 1
+  log(teamId, "tournament_register", `Team ${teamId} registered for ${t.title}`)
+  return r
+}
+
+export function listRegistrations(tournamentId: string) {
+  return registrations.filter((r) => r.tournamentId === tournamentId)
+}
+
+// Bracket generation helpers
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function nextPowerOfTwo(n: number) {
+  let p = 1
+  while (p < n) p <<= 1
+  return p
+}
+
+export function generateSingleElimBracket(tournamentId: string, teamIds: string[]): Bracket {
+  const shuffled = shuffle(teamIds)
+  const size = nextPowerOfTwo(shuffled.length)
+  const byes = size - shuffled.length
+  const seeds: Array<string | null> = [...shuffled, ...Array(byes).fill(null)]
+
+  const rounds: Array<{ round: number; matches: Match[] }> = []
+  let roundIndex = 1
+  let current = seeds
+  let matchIdCounter = 1
+  while (current.length > 1) {
+    const matches: Match[] = []
+    for (let i = 0; i < current.length; i += 2) {
+      const team1Id = current[i]
+      const team2Id = current[i + 1]
+      const m: Match = {
+        id: `m${tournamentId}-${matchIdCounter++}`,
+        tournamentId,
+        side: "winners",
+        round: roundIndex,
+        index: i / 2,
+        team1Id,
+        team2Id,
+      }
+      // Auto-advance on bye
+      if (team1Id && !team2Id) {
+        m.winnerId = team1Id
+      } else if (!team1Id && team2Id) {
+        m.winnerId = team2Id
+      }
+      matches.push(m)
+    }
+    rounds.push({ round: roundIndex, matches })
+    // Compute winners for next round (byes propagate)
+    const nextSeeds: Array<string | null> = []
+    for (const m of matches) {
+      if (m.winnerId) nextSeeds.push(m.winnerId)
+      else nextSeeds.push(null) // unresolved until played
+    }
+    current = nextSeeds
+    roundIndex++
+  }
+  const bracket: Bracket = {
+    tournamentId,
+    kind: "single",
+    rounds: {
+      winners: rounds,
+      losers: [],
+      grand: [],
+    },
+  }
+  brackets[tournamentId] = bracket
+  return bracket
+}
+
+export function generateDoubleElimBracket(tournamentId: string, teamIds: string[]): Bracket {
+  // Winners bracket identical to single-elimination
+  const winners = generateSingleElimBracket(tournamentId, teamIds).rounds.winners
+  // Skeleton losers bracket with the necessary number of rounds
+  const roundsCount = winners.length
+  const losers: Array<{ round: number; matches: Match[] }> = []
+  let matchIdCounter = 1000
+  for (let r = 1; r <= roundsCount; r++) {
+    // approximate number of matches per losers round
+    const matchesInRound = Math.max(1, Math.floor(Math.pow(2, Math.max(0, roundsCount - r - 1))))
+    const ms: Match[] = Array.from({ length: matchesInRound }, (_, i) => ({
+      id: `lm${tournamentId}-${matchIdCounter++}`,
+      tournamentId,
+      side: "losers" as const,
+      round: r,
+      index: i,
+      team1Id: null,
+      team2Id: null,
+    }))
+    losers.push({ round: r, matches: ms })
+  }
+  const grand: Array<{ round: number; matches: Match[] }> = [
+    { round: 1, matches: [{ id: `gm${tournamentId}-1`, tournamentId, side: "grand", round: 1, index: 0 }] as Match[] },
+  ]
+  const bracket: Bracket = {
+    tournamentId,
+    kind: "double",
+    rounds: { winners, losers, grand },
+  }
+  brackets[tournamentId] = bracket
+  return bracket
+}
+
+export function getBracket(tournamentId: string) {
+  return brackets[tournamentId] || null
 }
