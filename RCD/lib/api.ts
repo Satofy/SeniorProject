@@ -118,13 +118,24 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response
-        .json()
-        .catch(() => ({ message: "Request failed" }));
+      // Try JSON; if fails, capture raw text for diagnostics
+      let error: any;
+      try {
+        error = await response.json();
+      } catch {
+        const text = await response.text().catch(() => "");
+        error = { message: text || "Request failed" };
+      }
       throw new Error(error.message || `HTTP ${response.status}`);
     }
-
-    return response.json();
+    // Successful path – attempt JSON parse with diagnostics fallback
+    try {
+      return await response.json();
+    } catch (e: any) {
+      const raw = await response.text().catch(() => "");
+      console.error("Failed to parse JSON for", endpoint, "Raw:", raw.slice(0, 200));
+      throw new Error("Malformed JSON response: " + (e?.message || "parse error"));
+    }
   }
 
   private normalizeTournament(raw: any): Tournament {

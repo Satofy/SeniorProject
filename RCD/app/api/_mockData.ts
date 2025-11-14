@@ -78,64 +78,104 @@ export type Bracket = {
 let counter = 1000
 const newid = () => String(counter++)
 
-// Seed users
-export const users: MockUser[] = [
-  {
-    id: "1",
-    email: "owner@example.com",
-    role: "team_manager",
-    username: "owner",
-  },
-  {
-    id: "2",
-    email: "player1@example.com",
-    role: "player",
-    username: "player1",
-  },
-  {
-    id: "3",
-    email: "player2@example.com",
-    role: "player",
-    username: "player2",
-  },
-  { id: "4", email: "admin@example.com", role: "admin", username: "admin" },
-];
+// Global singleton store to survive Next.js dev fast refresh
+const g: any = globalThis as any
+if (!g.__RCD_STORE__) {
+  g.__RCD_STORE__ = {
+    users: [] as MockUser[],
+    teams: [] as MockTeam[],
+    tournaments: [] as MockTournament[],
+    registrations: [] as Registration[],
+    brackets: {} as Record<string, Bracket>,
+    joinRequests: [] as JoinRequest[],
+    bracketSubscribers: {} as Record<string, Set<(b: Bracket) => void>>,
+    auditLogs: [] as AuditLog[],
+  }
+}
+const STORE = g.__RCD_STORE__
 
-// Seed teams
-export const teams: MockTeam[] = [
-  {
-    id: "t1",
-    name: "RCD Legends",
-    tag: "RCD",
-    managerId: "1",
-    members: [users[0], users[1], users[2]],
-    gamesPlayed: 42,
-    balance: 1500,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "t2",
-    name: "Shadow Clan",
-    tag: "SHDW",
-    managerId: "4",
-    members: [users[3], users[2]],
-    gamesPlayed: 12,
-    createdAt: new Date().toISOString(),
-  },
-]
+// Seed users (only once)
+export const users: MockUser[] = STORE.users
+if (!users.length) {
+  users.push(
+    {
+      id: "1",
+      email: "owner@example.com",
+      role: "team_manager",
+      username: "owner",
+    },
+    {
+      id: "2",
+      email: "player1@example.com",
+      role: "player",
+      username: "player1",
+    },
+    {
+      id: "3",
+      email: "player2@example.com",
+      role: "player",
+      username: "player2",
+    },
+    { id: "4", email: "admin@example.com", role: "admin", username: "admin" }
+  );
+}
 
-// Seed tournaments
-export const tournaments: MockTournament[] = [
-  { id: "a1", title: "Autumn Cup", date: new Date().toISOString(), type: "5v5", status: "upcoming", maxParticipants: 32, currentParticipants: 10, game: "Valorant" },
-  { id: "a2", title: "Winter Clash", date: new Date().toISOString(), type: "Solo", status: "ongoing", maxParticipants: 16, currentParticipants: 8, game: "League of Legends" },
-]
+export const teams: MockTeam[] = STORE.teams;
+if (!teams.length) {
+  teams.push(
+    {
+      id: "t1",
+      name: "RCD Legends",
+      tag: "RCD",
+      managerId: "1",
+      members: [users[0], users[1], users[2]],
+      gamesPlayed: 42,
+      balance: 1500,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: "t2",
+      name: "Shadow Clan",
+      tag: "SHDW",
+      managerId: "4",
+      members: [users[3], users[2]],
+      gamesPlayed: 12,
+      createdAt: new Date().toISOString(),
+    }
+  );
+}
 
-// Storage for registrations and brackets
-export const registrations: Registration[] = []
-export const brackets: Record<string, Bracket> = {}
-export const joinRequests: JoinRequest[] = []
-// subscribers for SSE style updates
-export const bracketSubscribers: Record<string, Set<(b: Bracket) => void>> = {}
+export const tournaments: MockTournament[] = STORE.tournaments;
+if (!tournaments.length) {
+  tournaments.push(
+    {
+      id: "a1",
+      title: "Autumn Cup",
+      date: new Date().toISOString(),
+      type: "5v5",
+      status: "upcoming",
+      maxParticipants: 32,
+      currentParticipants: 10,
+      game: "Valorant",
+    },
+    {
+      id: "a2",
+      title: "Winter Clash",
+      date: new Date().toISOString(),
+      type: "Solo",
+      status: "ongoing",
+      maxParticipants: 16,
+      currentParticipants: 8,
+      game: "League of Legends",
+    }
+  );
+}
+
+// Storage (persistent singleton references)
+export const registrations: Registration[] = STORE.registrations
+export const brackets: Record<string, Bracket> = STORE.brackets
+export const joinRequests: JoinRequest[] = STORE.joinRequests
+export const bracketSubscribers: Record<string, Set<(b: Bracket) => void>> = STORE.bracketSubscribers
 
 function broadcastBracket(tournamentId: string) {
   const b = brackets[tournamentId]
@@ -160,7 +200,7 @@ export type AuditLog = {
   details?: string
 }
 
-export const auditLogs: AuditLog[] = []
+export const auditLogs: AuditLog[] = STORE.auditLogs;
 
 function log(user: string, action: string, details?: string) {
   auditLogs.push({ timestamp: new Date().toISOString(), user, action, details })

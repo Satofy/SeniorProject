@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { addTeam, teams, deleteTeam as removeTeam } from "../_mockData";
+import { addTeam, teams, deleteTeam as removeTeam, users } from "../_mockData";
 
 export async function GET(
   _req: NextRequest,
@@ -18,7 +18,11 @@ export async function POST(
   const tag = body?.tag as string | undefined;
   if (!name)
     return NextResponse.json({ message: "Name is required" }, { status: 400 });
-  const t = addTeam(name, tag);
+  const auth = req.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  const managerId =
+    token && users.find((u) => u.id === token) ? token : users[0].id;
+  const t = addTeam(name, tag, managerId);
   return NextResponse.json(t, { status: 201 });
 }
 
