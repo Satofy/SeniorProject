@@ -11,8 +11,16 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const score1 = body.score1 as number | undefined;
     const score2 = body.score2 as number | undefined;
-    const winnerOverride = body.winnerId as string | undefined;
-    const match = reportMatch(id, matchId, score1, score2, winnerOverride);
+  const winnerOverride = body.winnerId as string | undefined;
+  const actorId = body.actorId as string | undefined;
+  const match = reportMatch(
+    id,
+    matchId,
+    score1,
+    score2,
+    winnerOverride,
+    actorId || "system"
+  );
     return NextResponse.json(match);
   } catch (e: any) {
     return NextResponse.json(

@@ -16,6 +16,7 @@ interface BracketViewerProps {
 export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerProps) {
   const [bracket, setBracket] = useState<Bracket | null>(initial || null);
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
+  const [resetTarget, setResetTarget] = useState<Match | null>(null);
   const score1Ref = useRef<HTMLInputElement | null>(null);
   const score2Ref = useRef<HTMLInputElement | null>(null);
   const [teamsById, setTeamsById] = useState<Record<string, string>>({});
@@ -23,7 +24,10 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
   useEffect(() => {
     // fetch latest bracket if not provided
     if (!bracket) {
-      api.getBracket(tournamentId).then(setBracket).catch(() => {});
+      api
+        .getBracket(tournamentId)
+        .then(setBracket)
+        .catch(() => {});
     }
     const es = api.subscribeBracket(tournamentId, (b: Bracket) => {
       setBracket(b);
@@ -33,11 +37,16 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
 
   // fetch teams once to show names
   useEffect(() => {
-    api.getTeams().then((all: Team[]) => {
-      const map: Record<string, string> = {};
-      all.forEach(t => { map[t.id] = t.name; });
-      setTeamsById(map);
-    }).catch(() => {});
+    api
+      .getTeams()
+      .then((all: Team[]) => {
+        const map: Record<string, string> = {};
+        all.forEach((t) => {
+          map[t.id] = t.name;
+        });
+        setTeamsById(map);
+      })
+      .catch(() => {});
   }, []);
 
   const nameFor = (teamId?: string | null) => {
@@ -67,10 +76,12 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
     }
   };
 
-  const resetMatch = async (m: Match) => {
+  const performReset = async () => {
+    if (!resetTarget) return;
     try {
-      await api.resetMatch(tournamentId, m.id);
+      await api.resetMatch(tournamentId, resetTarget.id);
       toast.success("Match reset");
+      setResetTarget(null);
     } catch (e: any) {
       toast.error(e?.message || "Failed to reset");
     }
@@ -87,16 +98,24 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
             <div className="flex gap-6">
               {bracket.rounds[side].map((r) => (
                 <div key={`${side}-r${r.round}`} className="min-w-[220px]">
-                  <div className="text-xs text-muted-foreground mb-2">Round {r.round}</div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Round {r.round}
+                  </div>
                   <div className="space-y-3">
                     {r.matches.map((m) => (
                       <div
                         key={m.id}
-                        className={`border rounded p-3 bg-card/60 relative ${m.status === "completed" ? "opacity-70" : ""}`}
+                        className={`border rounded p-3 bg-card/60 relative ${
+                          m.status === "completed" ? "opacity-70" : ""
+                        }`}
                       >
                         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                           <span>Match {m.index + 1}</span>
-                          <Badge variant={m.status === "completed" ? "secondary" : "outline"}>
+                          <Badge
+                            variant={
+                              m.status === "completed" ? "secondary" : "outline"
+                            }
+                          >
                             {m.status === "completed" ? "Completed" : "Pending"}
                           </Badge>
                         </div>
@@ -115,28 +134,66 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                           </div>
                         </div>
                         {m.winnerId && (
-                          <div className="text-xs text-primary mt-2">Winner: {nameFor(m.winnerId)}</div>
+                          <div className="text-xs text-primary mt-2">
+                            Winner: {nameFor(m.winnerId)}
+                          </div>
                         )}
-                        {isAdmin && m.status !== "completed" && (m.team1Id || m.team2Id) && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 w-full"
-                            onClick={() => beginReport(m)}
-                          >
-                            Report
-                          </Button>
-                        )}
+                        {isAdmin &&
+                          m.status !== "completed" &&
+                          (m.team1Id || m.team2Id) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 w-full"
+                              onClick={() => beginReport(m)}
+                            >
+                              Report
+                            </Button>
+                          )}
                         {isAdmin && m.status === "completed" && (
                           <Button
                             size="sm"
                             variant="ghost"
                             className="mt-2 w-full"
-                            onClick={() => resetMatch(m)}
+                            onClick={() => setResetTarget(m)}
                           >
                             Reset
                           </Button>
                         )}
+                        {/* Reset Confirm Dialog */}
+                        <Dialog
+                          open={!!resetTarget}
+                          onOpenChange={(o) => !o && setResetTarget(null)}
+                        >
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Confirm Reset</DialogTitle>
+                            </DialogHeader>
+                            {resetTarget && (
+                              <div className="space-y-4 text-sm">
+                                <p>
+                                  Reset match <strong>{resetTarget.id}</strong>?
+                                  This will clear scores and winner. You cannot
+                                  reset if the winner already propagated.
+                                </p>
+                                <div className="flex gap-2 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => setResetTarget(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    onClick={performReset}
+                                  >
+                                    Reset
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </DialogContent>
+                        </Dialog>
                       </div>
                     ))}
                   </div>
@@ -147,7 +204,10 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
         ) : null
       )}
 
-      <Dialog open={!!reportingMatch} onOpenChange={(o) => !o && setReportingMatch(null)}>
+      <Dialog
+        open={!!reportingMatch}
+        onOpenChange={(o) => !o && setReportingMatch(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Report Match</DialogTitle>
@@ -155,20 +215,40 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
           {reportingMatch && (
             <div className="space-y-4">
               <div className="text-sm">
-                {reportingMatch.team1Id || "TBD"} vs {reportingMatch.team2Id || "TBD"}
+                {reportingMatch.team1Id || "TBD"} vs{" "}
+                {reportingMatch.team2Id || "TBD"}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs mb-1 block">Score {reportingMatch.team1Id || "T1"}</label>
-                  <Input type="number" ref={score1Ref} min={0} defaultValue={0} />
+                  <label className="text-xs mb-1 block">
+                    Score {reportingMatch.team1Id || "T1"}
+                  </label>
+                  <Input
+                    type="number"
+                    ref={score1Ref}
+                    min={0}
+                    defaultValue={0}
+                  />
                 </div>
                 <div>
-                  <label className="text-xs mb-1 block">Score {reportingMatch.team2Id || "T2"}</label>
-                  <Input type="number" ref={score2Ref} min={0} defaultValue={0} />
+                  <label className="text-xs mb-1 block">
+                    Score {reportingMatch.team2Id || "T2"}
+                  </label>
+                  <Input
+                    type="number"
+                    ref={score2Ref}
+                    min={0}
+                    defaultValue={0}
+                  />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setReportingMatch(null)}>Cancel</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setReportingMatch(null)}
+                >
+                  Cancel
+                </Button>
                 <Button onClick={submitReport}>Submit</Button>
               </DialogFooter>
             </div>

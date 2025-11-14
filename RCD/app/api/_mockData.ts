@@ -40,6 +40,15 @@ export type Registration = {
   createdAt: string
 }
 
+// Team join requests
+export type JoinRequest = {
+  id: string
+  teamId: string
+  userId: string
+  status: "pending" | "approved" | "declined"
+  createdAt: string
+}
+
 // Bracket/Match models
 export type BracketKind = "single" | "double"
 export type BracketSide = "winners" | "losers" | "grand"
@@ -124,6 +133,7 @@ export const tournaments: MockTournament[] = [
 // Storage for registrations and brackets
 export const registrations: Registration[] = []
 export const brackets: Record<string, Bracket> = {}
+export const joinRequests: JoinRequest[] = []
 // subscribers for SSE style updates
 export const bracketSubscribers: Record<string, Set<(b: Bracket) => void>> = {}
 
@@ -172,6 +182,53 @@ export function addTeam(name: string, tag?: string, managerId: string = users[0]
 
 export function getTeam(id: string) {
   return teams.find((t) => t.id === id) || null
+}
+
+export function createJoinRequest(teamId: string, userId: string): JoinRequest {
+  const team = getTeam(teamId)
+  if (!team) throw new Error("Team not found")
+  // Prevent duplicate/pending
+  const dup = joinRequests.find(j => j.teamId === teamId && j.userId === userId && j.status === "pending")
+  if (dup) throw new Error("Request already pending")
+  // Prevent if already a member
+  if (team.members.some(m => m.id === userId)) throw new Error("Already a team member")
+  const req: JoinRequest = { id: `jr${newid()}`, teamId, userId, status: "pending", createdAt: new Date().toISOString() }
+  joinRequests.push(req)
+  log(userId, "join_request", `Requested to join team ${teamId}`)
+  return req
+}
+
+export function listTeamJoinRequests(teamId: string) {
+  return joinRequests.filter(j => j.teamId === teamId)
+}
+
+export function approveTeamJoinRequest(teamId: string, requestId: string) {
+  const team = getTeam(teamId)
+  if (!team) throw new Error("Team not found")
+  const req = joinRequests.find(j => j.id === requestId && j.teamId === teamId)
+  if (!req) throw new Error("Request not found")
+  if (req.status !== "pending") throw new Error("Request already processed")
+  const user = users.find(u => u.id === req.userId)
+  if (!user) throw new Error("User not found")
+  if (!team.members.some(m => m.id === user.id)) {
+    team.members.push(user)
+  }
+  req.status = "approved"
+  // Close any other pending requests for same user/team
+  joinRequests.forEach(j => { if (j !== req && j.teamId === teamId && j.userId === req.userId && j.status === "pending") j.status = "declined" })
+  log(team.managerId, "approve_join", `Approved user ${user.id} to team ${teamId}`)
+  return req
+}
+
+export function declineTeamJoinRequest(teamId: string, requestId: string) {
+  const team = getTeam(teamId)
+  if (!team) throw new Error("Team not found")
+  const req = joinRequests.find(j => j.id === requestId && j.teamId === teamId)
+  if (!req) throw new Error("Request not found")
+  if (req.status !== "pending") throw new Error("Request already processed")
+  req.status = "declined"
+  log(team.managerId, "decline_join", `Declined user ${req.userId} to team ${teamId}`)
+  return req
 }
 
 export function removeMember(teamId: string, userId: string) {
@@ -469,64 +526,117 @@ function propagateLoser(bracket: Bracket, match: Match) {
   }
 }
 
-export function reportMatch(tournamentId: string, matchId: string, score1?: number, score2?: number, winnerOverride?: string) {
-  const b = brackets[tournamentId]
-  if (!b) throw new Error("Bracket not found")
-  const m = findMatch(tournamentId, matchId)
-  if (!m) throw new Error("Match not found")
-  if (m.status === "completed") throw new Error("Match already completed")
-  if (!m.team1Id && !m.team2Id) throw new Error("Match has no participants")
+export function reportMatch(
+  tournamentId: string,
+  matchId: string,
+  score1?: number,
+  score2?: number,
+  winnerOverride?: string,
+  actorId: string = "system"
+) {
+  const b = brackets[tournamentId];
+  if (!b) throw new Error("Bracket not found");
+  const m = findMatch(tournamentId, matchId);
+  if (!m) throw new Error("Match not found");
+  if (m.status === "completed") throw new Error("Match already completed");
+  if (!m.team1Id && !m.team2Id) throw new Error("Match has no participants");
   if (typeof winnerOverride === "string") {
-    m.winnerId = winnerOverride
+    m.winnerId = winnerOverride;
   } else if (typeof score1 === "number" && typeof score2 === "number") {
-    m.score1 = score1
-    m.score2 = score2
+    m.score1 = score1;
+    m.score2 = score2;
     if (m.team1Id && m.team2Id) {
-      m.winnerId = score1 === score2 ? m.team1Id : (score1 > score2 ? m.team1Id! : m.team2Id!)
+      m.winnerId =
+        score1 === score2
+          ? m.team1Id
+          : score1 > score2
+          ? m.team1Id!
+          : m.team2Id!;
     } else {
       // bye scenario
-      m.winnerId = m.team1Id || m.team2Id || undefined
+      m.winnerId = m.team1Id || m.team2Id || undefined;
     }
   } else {
-    throw new Error("Provide scores or a winner override")
+    throw new Error("Provide scores or a winner override");
   }
-  m.status = "completed"
-  m.completedAt = new Date().toISOString()
-  propagateWinnerWinners(b, m)
-  propagateLoser(b, m)
-  // Check grand final auto populate second participant from losers champion later (not implemented)
-  log("system", "report_match", `Match ${m.id} reported: ${m.team1Id ?? 'TBD'} ${m.score1 ?? ''} - ${m.score2 ?? ''} ${m.team2Id ?? 'TBD'}; winner ${m.winnerId}`)
-  broadcastBracket(tournamentId)
-  return m
+  m.status = "completed";
+  m.completedAt = new Date().toISOString();
+  propagateWinnerWinners(b, m);
+  propagateLoser(b, m);
+  // If losers bracket champion just finished, feed into grand final team2
+  if (b.kind === "double" && m.side === "losers") {
+    const losersRounds = b.rounds.losers;
+    const lastLosersRound = losersRounds[losersRounds.length - 1];
+    if (lastLosersRound && lastLosersRound.round === m.round) {
+      const grand = b.rounds.grand[0]?.matches[0];
+      if (grand && !grand.team2Id && m.winnerId) grand.team2Id = m.winnerId;
+    }
+  }
+  // If grand final completed, mark tournament completed
+  if (m.side === "grand" && m.status === "completed") {
+    const t = getTournament(tournamentId);
+    if (t && t.status !== "completed") {
+      t.status = "completed";
+      log(
+        actorId,
+        "complete_tournament",
+        `Tournament ${t.title} (${t.id}) completed by grand final`
+      );
+    }
+  }
+  log(
+    actorId,
+    "report_match",
+    `Match ${m.id} reported: ${m.team1Id ?? "TBD"} ${m.score1 ?? ""} - ${
+      m.score2 ?? ""
+    } ${m.team2Id ?? "TBD"}; winner ${m.winnerId}`
+  );
+  broadcastBracket(tournamentId);
+  return m;
 }
 
-export function resetMatch(tournamentId: string, matchId: string) {
-  const b = brackets[tournamentId]
-  if (!b) throw new Error("Bracket not found")
-  const m = findMatch(tournamentId, matchId)
-  if (!m) throw new Error("Match not found")
+export function resetMatch(
+  tournamentId: string,
+  matchId: string,
+  actorId: string = "system"
+) {
+  const b = brackets[tournamentId];
+  if (!b) throw new Error("Bracket not found");
+  const m = findMatch(tournamentId, matchId);
+  if (!m) throw new Error("Match not found");
   // removing downstream propagation is complex – for senior project we disallow reset if propagated
   if (m.status === "completed") {
     // naive check: if its winner appears in later round slot, block reset
-    const winnerId = m.winnerId
+    const winnerId = m.winnerId;
     if (winnerId) {
-      for (const side of ["winners","losers","grand"] as BracketSide[]) {
+      for (const side of ["winners", "losers", "grand"] as BracketSide[]) {
         for (const round of b.rounds[side]) {
           for (const child of round.matches) {
-            if (child !== m && (child.team1Id === winnerId || child.team2Id === winnerId)) {
-              throw new Error("Cannot reset: winner already propagated")
+            if (
+              child !== m &&
+              (child.team1Id === winnerId || child.team2Id === winnerId)
+            ) {
+              throw new Error("Cannot reset: winner already propagated");
             }
           }
         }
       }
     }
   }
-  m.score1 = undefined
-  m.score2 = undefined
-  m.winnerId = undefined
-  m.status = "pending"
-  m.completedAt = undefined
-  log("system", "reset_match", `Match ${m.id} reset`)
-  broadcastBracket(tournamentId)
-  return m
+  m.score1 = undefined;
+  m.score2 = undefined;
+  m.winnerId = undefined;
+  m.status = "pending";
+  m.completedAt = undefined;
+  log(actorId, "reset_match", `Match ${m.id} reset`);
+  broadcastBracket(tournamentId);
+  return m;
+}
+
+// Utility for tests to clear mock state
+export function resetState() {
+  registrations.splice(0, registrations.length)
+  for (const k of Object.keys(brackets)) delete brackets[k]
+  for (const k of Object.keys(bracketSubscribers)) delete bracketSubscribers[k]
+  auditLogs.splice(0, auditLogs.length)
 }
