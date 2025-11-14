@@ -13,24 +13,48 @@ export async function GET(
 
   const stream = new ReadableStream({
     start(controller) {
+      // Track active state so we stop enqueuing once the stream is closed/aborted.
+      let active = true;
+
+      const encoder = new TextEncoder();
+      const safeEnqueue = (payload: string) => {
+        if (!active) return;
+        try {
+          controller.enqueue(encoder.encode(payload));
+        } catch (err) {
+          // Controller closed; perform cleanup and mark inactive to prevent future attempts.
+          active = false;
+          cleanup();
+        }
+      };
+
+      const cleanup = () => {
+        if (!active) return; // idempotent safety
+        active = false;
+        if (unsubscribe) unsubscribe();
+        if (interval) clearInterval(interval);
+      };
+
       if (bracket) {
-        controller.enqueue(new TextEncoder().encode(serializeBracket(bracket)));
+        safeEnqueue(serializeBracket(bracket));
       }
+
       const unsubscribe = subscribeBracket(id, (b) => {
-        controller.enqueue(new TextEncoder().encode(serializeBracket(b)));
+        safeEnqueue(serializeBracket(b));
       });
+
       const interval = setInterval(() => {
-        controller.enqueue(new TextEncoder().encode(`: ping\n\n`));
+        safeEnqueue(`: ping\n\n`);
       }, 15000);
-      // No direct close event; rely on cancel
+
+      // Expose cleanup parts to cancel() via controller instance
       (controller as any).unsubscribe = unsubscribe;
       (controller as any).interval = interval;
+      (controller as any).cleanup = cleanup;
     },
     cancel(reason) {
-      const unsubscribe = (this as any).unsubscribe;
-      const interval = (this as any).interval;
-      if (unsubscribe) unsubscribe();
-      if (interval) clearInterval(interval);
+      const cleanup = (this as any).cleanup;
+      if (cleanup) cleanup();
     },
   });
 
