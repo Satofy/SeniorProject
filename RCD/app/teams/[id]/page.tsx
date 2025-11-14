@@ -8,7 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Shield, UserPlus, Check, XCircle } from "lucide-react"
+import {
+  ArrowLeft,
+  Shield,
+  UserPlus,
+  Check,
+  XCircle,
+  Clock,
+} from "lucide-react";
 import { toast } from "sonner"
 
 export default function TeamDetailPage() {
@@ -20,8 +27,9 @@ export default function TeamDetailPage() {
   const [loading, setLoading] = useState(true)
   const [requesting, setRequesting] = useState(false)
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
-  const [loadingRequests, setLoadingRequests] = useState(false)
-  const [refreshToggle, setRefreshToggle] = useState(0)
+  const [myPending, setMyPending] = useState<any | null>(null);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [refreshToggle, setRefreshToggle] = useState(0);
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -40,17 +48,19 @@ export default function TeamDetailPage() {
     fetchTeam();
   }, [id, router]);
 
-  // Load pending join requests if manager
+  // Load pending join requests (manager view) & detect user's own pending request
   useEffect(() => {
     const loadRequests = async () => {
       if (!id || !user) return;
-      if (user.id !== team?.managerId) return;
       setLoadingRequests(true);
       try {
         const list = await api.getTeamJoinRequests(id);
-        setPendingRequests(list.filter(r => r.status === 'pending'));
+        const pending = list.filter((r: any) => r.status === "pending");
+        setPendingRequests(user.id === team?.managerId ? pending : []);
+        setMyPending(pending.find((r: any) => r.userId === user.id) || null);
       } catch {
         setPendingRequests([]);
+        setMyPending(null);
       } finally {
         setLoadingRequests(false);
       }
@@ -60,17 +70,17 @@ export default function TeamDetailPage() {
 
   const handleRequestToJoin = async () => {
     if (!user) {
-      router.push("/login")
-      return
+      router.push("/login");
+      return;
     }
-
+    if (!id) return;
     setRequesting(true)
     try {
-  if (!id) return;
-  await api.requestToJoinTeam(id);
-      toast.success("Join request sent successfully!")
+      await api.requestToJoinTeam(id);
+      toast.success("Join request sent successfully!");
+      setRefreshToggle((t) => t + 1);
     } catch (error: any) {
-      toast.error(error.message || "Failed to send join request")
+      toast.error(error.message || "Failed to send join request");
     } finally {
       setRequesting(false)
     }
@@ -155,20 +165,25 @@ export default function TeamDetailPage() {
                 </div>
               </div>
               <CardDescription className="text-base">
-                {team.members?.length || 0} member{team.members?.length !== 1 ? "s" : ""}
+                {team.members?.length || 0} member
+                {team.members?.length !== 1 ? "s" : ""}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid md:grid-cols-2 gap-4">
                 {team.gamesPlayed !== undefined && (
                   <div className="p-4 bg-muted/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Games Played</p>
+                    <p className="text-sm text-muted-foreground">
+                      Games Played
+                    </p>
                     <p className="text-2xl font-bold">{team.gamesPlayed}</p>
                   </div>
                 )}
                 {team.balance !== undefined && (
                   <div className="p-4 bg-muted/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Team Balance</p>
+                    <p className="text-sm text-muted-foreground">
+                      Team Balance
+                    </p>
                     <p className="text-2xl font-bold">${team.balance}</p>
                   </div>
                 )}
@@ -181,10 +196,15 @@ export default function TeamDetailPage() {
                 {team.members && team.members.length > 0 ? (
                   <div className="space-y-2">
                     {team.members.map((member) => (
-                      <div key={member.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                      >
                         <div>
                           <p className="font-medium">{member.email}</p>
-                          <p className="text-sm text-muted-foreground capitalize">{member.role}</p>
+                          <p className="text-sm text-muted-foreground capitalize">
+                            {member.role}
+                          </p>
                         </div>
                         {member.id === team.managerId && (
                           <Badge variant="outline">
@@ -196,7 +216,9 @@ export default function TeamDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-8">No members yet</p>
+                  <p className="text-muted-foreground text-center py-8">
+                    No members yet
+                  </p>
                 )}
               </div>
             </CardContent>
@@ -211,21 +233,41 @@ export default function TeamDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {user ? (
-                <>
-                  {isManager ? (
-                    <p className="text-sm text-muted-foreground text-center">You manage this team</p>
-                  ) : isPlayer ? (
-                    <Button onClick={handleRequestToJoin} disabled={requesting} className="w-full" size="lg">
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      {requesting ? "Sending..." : "Request to Join"}
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center">Only players can join teams</p>
-                  )}
-                </>
+                isManager ? (
+                  <p className="text-sm text-muted-foreground text-center">
+                    You manage this team
+                  </p>
+                ) : user.teamId === team.id ? (
+                  <p className="text-sm text-green-600 text-center font-medium">
+                    You are a member of this team
+                  </p>
+                ) : myPending ? (
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <Clock className="w-5 h-5 text-yellow-500" />
+                    <p className="text-sm text-muted-foreground">
+                      Join request pending approval
+                    </p>
+                  </div>
+                ) : isPlayer ? (
+                  <Button
+                    onClick={handleRequestToJoin}
+                    disabled={requesting}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    {requesting ? "Sending..." : "Request to Join"}
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Only players can join teams
+                  </p>
+                )
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground text-center">Sign in to request to join this team</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Sign in to request to join this team
+                  </p>
                   <Button asChild className="w-full" size="lg">
                     <a href="/login">Sign In</a>
                   </Button>
@@ -238,7 +280,9 @@ export default function TeamDetailPage() {
             <Card className="border-primary/20">
               <CardHeader>
                 <CardTitle>Pending Requests</CardTitle>
-                <CardDescription>Approve or decline player join requests</CardDescription>
+                <CardDescription>
+                  Approve or decline player join requests
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
                 {loadingRequests ? (
@@ -247,17 +291,32 @@ export default function TeamDetailPage() {
                   <p className="text-muted-foreground">No pending requests</p>
                 ) : (
                   <div className="space-y-3">
-                    {pendingRequests.map(r => (
-                      <div key={r.id} className="flex items-center justify-between rounded border px-3 py-2">
+                    {pendingRequests.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between rounded border px-3 py-2"
+                      >
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{r.user?.email || r.userId}</p>
-                          <p className="text-xs text-muted-foreground">Requested {new Date(r.createdAt).toLocaleString()}</p>
+                          <p className="font-medium truncate">
+                            {r.user?.email || r.userId}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Requested {new Date(r.createdAt).toLocaleString()}
+                          </p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => approve(r.id)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => approve(r.id)}
+                          >
                             <Check className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => decline(r.id)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => decline(r.id)}
+                          >
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
@@ -265,7 +324,14 @@ export default function TeamDetailPage() {
                     ))}
                   </div>
                 )}
-                <Button variant="outline" size="sm" onClick={refreshRequests} className="w-full">Refresh Requests</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshRequests}
+                  className="w-full"
+                >
+                  Refresh Requests
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -288,7 +354,9 @@ export default function TeamDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>
                 <span className="font-medium">
-                  {team.createdAt ? new Date(team.createdAt).toLocaleDateString() : "N/A"}
+                  {team.createdAt
+                    ? new Date(team.createdAt).toLocaleDateString()
+                    : "N/A"}
                 </span>
               </div>
             </CardContent>
@@ -296,5 +364,5 @@ export default function TeamDetailPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

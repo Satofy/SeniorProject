@@ -26,8 +26,12 @@ function DashboardContent() {
         setTournaments(tournamentsData.filter((t) => t.status === "upcoming").slice(0, 5))
 
         if (user?.teamId) {
-          const teamData = await api.getTeam(user.teamId)
-          setTeam(teamData)
+          try {
+            const teamData = await api.getTeam(user.teamId);
+            setTeam(teamData);
+          } catch {}
+        } else {
+          setTeam(null)
         }
       } catch (error) {
         console.error("[v0] Failed to fetch dashboard data:", error)

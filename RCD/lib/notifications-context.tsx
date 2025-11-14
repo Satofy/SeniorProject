@@ -1,5 +1,13 @@
 "use client"
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
+import { api } from "./api";
 
 // Lightweight stub aligning with esports-rcd-frontend interface to satisfy imports in shared code builds.
 export type Notification = {
@@ -12,13 +20,20 @@ export type Notification = {
 }
 
 type NotificationsContextValue = {
-  notifications: Notification[]
-  unreadCount: number
-  dismiss: (id: string) => void
-  refresh: () => Promise<void>
-  clearAll: () => void
-  addNotification: (notification: { message: string; type?: Notification['type']; id?: string; createdAt?: string | number; actionLabel?: string; onAction?: () => void }) => void
-}
+  notifications: Notification[];
+  unreadCount: number;
+  dismiss: (id: string) => void;
+  refresh: () => Promise<void>;
+  clearAll: () => Promise<void>;
+  addNotification: (notification: {
+    message: string;
+    type?: Notification["type"];
+    id?: string;
+    createdAt?: string | number;
+    actionLabel?: string;
+    onAction?: () => void;
+  }) => void;
+};
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined)
 
@@ -29,16 +44,80 @@ function uuid() {
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(false);
   const dismiss = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }, [])
-  const clearAll = useCallback(() => setNotifications([]), [])
+  const clearAll = useCallback(async () => {
+    setNotifications([]);
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("rcd_token") || ""}`,
+        },
+      });
+    } catch {}
+  }, []);
   const addNotification: NotificationsContextValue['addNotification'] = useCallback((n) => {
     const id = n.id || uuid()
     const createdAt = n.createdAt ? new Date(n.createdAt).toISOString() : new Date().toISOString()
     setNotifications(prev => [{ id, type: n.type || 'info', message: n.message, createdAt, actionLabel: n.actionLabel, onAction: n.onAction }, ...prev.filter(x => x.id !== id)])
   }, [])
-  const refresh = useCallback(async () => { /* no-op stub */ }, [])
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Direct fetch to avoid circular dependency complexity; we already imported api
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("rcd_token")
+          : null;
+      if (!token) {
+        setNotifications((prev) => prev);
+        return;
+      }
+      const res = await fetch("/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const mapped: Notification[] = raw.map((r: any) => ({
+          id: r.id,
+          type: (r.type as any) || "info",
+          message: r.message,
+          createdAt: r.createdAt,
+          actionLabel: r.teamId ? "View Team" : undefined,
+          onAction: r.teamId
+            ? () => {
+                window.location.href = `/teams/${r.teamId}`;
+              }
+            : undefined,
+        }));
+        // Merge without duplicating existing IDs
+        setNotifications((prev) => {
+          const ids = new Set(prev.map((p) => p.id));
+          (mapped || [])
+            .filter((m) => !ids.has(m.id))
+            .forEach((m) => prev.unshift(m));
+          return [...prev];
+        });
+      }
+    } catch (e) {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  const refresh = useCallback(async () => {
+    await load();
+  }, [load]);
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, [load]);
+
   const unreadCount = notifications.length
   const value = useMemo(() => ({ notifications, unreadCount, dismiss, refresh, clearAll, addNotification }), [notifications, unreadCount, dismiss, refresh, clearAll, addNotification])
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>
@@ -53,7 +132,7 @@ export function useNotifications() {
     unreadCount: 0,
     dismiss: () => {},
     refresh: async () => {},
-    clearAll: () => {},
+    clearAll: async () => {},
     addNotification: () => {},
   };
 }

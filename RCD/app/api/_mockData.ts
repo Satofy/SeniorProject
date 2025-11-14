@@ -5,6 +5,8 @@ export type MockUser = {
   email: string;
   role: "guest" | "player" | "team_manager" | "admin";
   username?: string;
+  // Single-team affiliation for simplified model
+  teamId?: string;
 };
 
 export type MockTeam = {
@@ -90,7 +92,8 @@ if (!g.__RCD_STORE__) {
     joinRequests: [] as JoinRequest[],
     bracketSubscribers: {} as Record<string, Set<(b: Bracket) => void>>,
     auditLogs: [] as AuditLog[],
-  }
+    userNotifications: {} as Record<string, UserNotification[]>,
+  };
 }
 const STORE = g.__RCD_STORE__
 
@@ -201,6 +204,43 @@ export type AuditLog = {
 }
 
 export const auditLogs: AuditLog[] = STORE.auditLogs;
+export type UserNotification = {
+  id: string;
+  type: "info" | "warning" | "success" | "action";
+  message: string;
+  createdAt: string;
+  teamId?: string;
+  requestId?: string;
+};
+export const userNotifications: Record<string, UserNotification[]> =
+  STORE.userNotifications;
+
+function notify(
+  userId: string,
+  n: Omit<UserNotification, "id" | "createdAt"> & { createdAt?: string }
+) {
+  if (!userNotifications[userId]) userNotifications[userId] = [];
+  const note: UserNotification = {
+    id: `un${newid()}`,
+    type: n.type || "info",
+    message: n.message,
+    createdAt: n.createdAt
+      ? new Date(n.createdAt).toISOString()
+      : new Date().toISOString(),
+    teamId: n.teamId,
+    requestId: n.requestId,
+  };
+  userNotifications[userId].unshift(note);
+  return note;
+}
+
+export function listUserNotifications(userId: string) {
+  return userNotifications[userId] || [];
+}
+
+export function clearUserNotifications(userId: string) {
+  userNotifications[userId] = [];
+}
 
 function log(user: string, action: string, details?: string) {
   auditLogs.push({ timestamp: new Date().toISOString(), user, action, details })
@@ -214,10 +254,13 @@ export function addTeam(name: string, tag?: string, managerId: string = users[0]
     managerId,
     members: [users.find((u) => u.id === managerId)!],
     createdAt: new Date().toISOString(),
-  }
-  teams.push(t)
-  log(managerId, "create_team", `Team ${t.name} (${t.id}) created`)
-  return t
+  };
+  teams.push(t);
+  // Assign manager teamId if not already set (single-team model)
+  const mgr = users.find((u) => u.id === managerId);
+  if (mgr && !mgr.teamId) mgr.teamId = t.id;
+  log(managerId, "create_team", `Team ${t.name} (${t.id}) created`);
+  return t;
 }
 
 export function getTeam(id: string) {
@@ -227,6 +270,11 @@ export function getTeam(id: string) {
 export function createJoinRequest(teamId: string, userId: string): JoinRequest {
   const team = getTeam(teamId)
   if (!team) throw new Error("Team not found")
+  const user = users.find((u) => u.id === userId);
+  if (!user) throw new Error("User not found");
+  // Block if user already affiliated with a team (single-team rule)
+  if (user.teamId && user.teamId !== teamId)
+    throw new Error("Already joined a team");
   // Prevent duplicate/pending
   const dup = joinRequests.find(j => j.teamId === teamId && j.userId === userId && j.status === "pending")
   if (dup) throw new Error("Request already pending")
@@ -235,6 +283,12 @@ export function createJoinRequest(teamId: string, userId: string): JoinRequest {
   const req: JoinRequest = { id: `jr${newid()}`, teamId, userId, status: "pending", createdAt: new Date().toISOString() }
   joinRequests.push(req)
   log(userId, "join_request", `Requested to join team ${teamId}`)
+  notify(team.managerId, {
+    type: "action",
+    message: `New join request from user ${user.email} for team ${team.name}`,
+    teamId,
+    requestId: req.id,
+  });
   return req
 }
 
@@ -243,21 +297,42 @@ export function listTeamJoinRequests(teamId: string) {
 }
 
 export function approveTeamJoinRequest(teamId: string, requestId: string) {
-  const team = getTeam(teamId)
-  if (!team) throw new Error("Team not found")
-  const req = joinRequests.find(j => j.id === requestId && j.teamId === teamId)
-  if (!req) throw new Error("Request not found")
-  if (req.status !== "pending") throw new Error("Request already processed")
-  const user = users.find(u => u.id === req.userId)
-  if (!user) throw new Error("User not found")
-  if (!team.members.some(m => m.id === user.id)) {
-    team.members.push(user)
+  const team = getTeam(teamId);
+  if (!team) throw new Error("Team not found");
+  const req = joinRequests.find(
+    (j) => j.id === requestId && j.teamId === teamId
+  );
+  if (!req) throw new Error("Request not found");
+  if (req.status !== "pending") throw new Error("Request already processed");
+  const user = users.find((u) => u.id === req.userId);
+  if (!user) throw new Error("User not found");
+  if (!team.members.some((m) => m.id === user.id)) {
+    team.members.push(user);
   }
-  req.status = "approved"
+  req.status = "approved";
+  // Set user's team affiliation
+  if (!user.teamId) user.teamId = teamId;
   // Close any other pending requests for same user/team
-  joinRequests.forEach(j => { if (j !== req && j.teamId === teamId && j.userId === req.userId && j.status === "pending") j.status = "declined" })
-  log(team.managerId, "approve_join", `Approved user ${user.id} to team ${teamId}`)
-  return req
+  joinRequests.forEach((j) => {
+    if (
+      j !== req &&
+      j.teamId === teamId &&
+      j.userId === req.userId &&
+      j.status === "pending"
+    )
+      j.status = "declined";
+  });
+  log(
+    team.managerId,
+    "approve_join",
+    `Approved user ${user.id} to team ${teamId}`
+  );
+  notify(user.id, {
+    type: "success",
+    message: `You were approved to join team ${team.name}`,
+    teamId,
+  });
+  return req;
 }
 
 export function listManagerPendingRequests(managerId: string) {
@@ -278,6 +353,11 @@ export function declineTeamJoinRequest(teamId: string, requestId: string) {
   if (req.status !== "pending") throw new Error("Request already processed")
   req.status = "declined"
   log(team.managerId, "decline_join", `Declined user ${req.userId} to team ${teamId}`)
+  notify(req.userId, {
+    type: "info",
+    message: `Your request to join team ${team.name} was declined`,
+    teamId,
+  });
   return req
 }
 

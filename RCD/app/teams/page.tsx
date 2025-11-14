@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react";
 import { api, type Team } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
@@ -22,73 +22,82 @@ import {
 import { Label } from "@/components/ui/label"
 
 export default function TeamsPage() {
-  const { user } = useAuth()
-  const [teams, setTeams] = useState<Team[]>([])
-  const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [newTeamName, setNewTeamName] = useState("")
-  const [newTeamTag, setNewTeamTag] = useState("")
-  const [creating, setCreating] = useState(false)
+  const { user } = useAuth();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [filteredTeams, setFilteredTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamTag, setNewTeamTag] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const fetchTeams = async () => {
     try {
-      const data = await api.getTeams()
-      setTeams(data)
-      setFilteredTeams(data)
+      const data = await api.getTeams();
+      setTeams(data);
+      setFilteredTeams(data);
     } catch (error) {
-      toast.error("Failed to load teams")
+      toast.error("Failed to load teams");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchTeams()
-  }, [])
+    fetchTeams();
+  }, []);
+
+  // Compute base list excluding player's own team (requirement: remove joined team from listing)
+  const availableTeams = useMemo(() => {
+    if (!user) return teams;
+    if (user.teamId) return teams.filter((t) => t.id !== user.teamId);
+    return teams;
+  }, [teams, user]);
 
   useEffect(() => {
     if (searchQuery) {
       setFilteredTeams(
-        teams.filter(
+        availableTeams.filter(
           (t) =>
             t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            t.tag?.toLowerCase().includes(searchQuery.toLowerCase()),
-        ),
-      )
+            t.tag?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      );
     } else {
-      setFilteredTeams(teams)
+      setFilteredTeams(availableTeams);
     }
-  }, [searchQuery, teams])
+  }, [searchQuery, availableTeams]);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) {
-      toast.error("Team name is required")
-      return
+      toast.error("Team name is required");
+      return;
     }
 
-    setCreating(true)
+    setCreating(true);
     try {
-      await api.createTeam(newTeamName, newTeamTag)
-      toast.success("Team created successfully!")
-      setShowCreateDialog(false)
-      setNewTeamName("")
-      setNewTeamTag("")
-      fetchTeams()
+      await api.createTeam(newTeamName, newTeamTag);
+      toast.success("Team created successfully!");
+      setShowCreateDialog(false);
+      setNewTeamName("");
+      setNewTeamTag("");
+      fetchTeams();
     } catch (error: any) {
-      toast.error(error.message || "Failed to create team")
+      toast.error(error.message || "Failed to create team");
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
-  }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-2">Teams</h1>
-          <p className="text-muted-foreground">Browse teams and join the competition</p>
+          <p className="text-muted-foreground">
+            Browse teams and join the competition
+          </p>
         </div>
         {user && (
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -101,7 +110,9 @@ export default function TeamsPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Team</DialogTitle>
-                <DialogDescription>Start your own team and recruit players to compete together</DialogDescription>
+                <DialogDescription>
+                  Start your own team and recruit players to compete together
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -125,7 +136,10 @@ export default function TeamsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCreateDialog(false)}
+                >
                   Cancel
                 </Button>
                 <Button onClick={handleCreateTeam} disabled={creating}>
@@ -184,7 +198,8 @@ export default function TeamsPage() {
                   </div>
                 </div>
                 <CardDescription>
-                  {team.members?.length || 0} member{team.members?.length !== 1 ? "s" : ""}
+                  {team.members?.length || 0} member
+                  {team.members?.length !== 1 ? "s" : ""}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -193,9 +208,15 @@ export default function TeamsPage() {
                   <span>Manager: {team.managerId}</span>
                 </div>
                 {team.gamesPlayed !== undefined && (
-                  <div className="text-sm text-muted-foreground">{team.gamesPlayed} games played</div>
+                  <div className="text-sm text-muted-foreground">
+                    {team.gamesPlayed} games played
+                  </div>
                 )}
-                <Button asChild className="w-full bg-transparent" variant="outline">
+                <Button
+                  asChild
+                  className="w-full bg-transparent"
+                  variant="outline"
+                >
                   <Link href={`/teams/${team.id}`}>View Team</Link>
                 </Button>
               </CardContent>
@@ -206,7 +227,9 @@ export default function TeamsPage() {
         <Card className="p-12 text-center">
           <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-xl font-semibold mb-2">No teams found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search or create a new team</p>
+          <p className="text-muted-foreground mb-4">
+            Try adjusting your search or create a new team
+          </p>
           {user && (
             <Button onClick={() => setShowCreateDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />
@@ -216,5 +239,5 @@ export default function TeamsPage() {
         </Card>
       )}
     </div>
-  )
+  );
 }
