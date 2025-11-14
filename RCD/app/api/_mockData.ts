@@ -31,6 +31,11 @@ export type MockTournament = {
   currentParticipants?: number
   prizePool?: string
   game?: string
+  payout?: {
+    total: number
+    awards: Array<{ teamId: string; amount: number }>
+    timestamp: string
+  }
 }
 
 // Registrations
@@ -825,10 +830,192 @@ export function editMatchScore(
   return m;
 }
 
+// Admin override: change winner only when it is safe (single-elimination and next slot not yet decided)
+export function overrideMatchWinner(
+  tournamentId: string,
+  matchId: string,
+  newWinnerId: string,
+  score1?: number,
+  score2?: number,
+  actorId: string = "system"
+) {
+  const b = brackets[tournamentId];
+  if (!b) throw new Error("Bracket not found");
+  const m = findMatch(tournamentId, matchId);
+  if (!m) throw new Error("Match not found");
+  if (m.status !== "completed") throw new Error("Match is not completed yet");
+  if (!m.team1Id && !m.team2Id) throw new Error("Match has no participants");
+
+  // Only allow override in single-elimination for now
+  if (b.kind !== "single" || m.side !== "winners") {
+    throw new Error("Override allowed only for single-elimination winners bracket");
+  }
+
+  // new winner must be one of the participants
+  if (newWinnerId !== m.team1Id && newWinnerId !== m.team2Id) {
+    throw new Error("New winner must be one of the match participants");
+  }
+
+  const currentWinner = m.winnerId;
+  if (currentWinner === newWinnerId) {
+    // No change; optionally update scores
+    if (typeof score1 === "number") m.score1 = score1;
+    if (typeof score2 === "number") m.score2 = score2;
+    broadcastBracket(tournamentId);
+    return m;
+  }
+
+  // Identify next match slot in winners bracket
+  const winnersRounds = b.rounds.winners;
+  const round = winnersRounds.find((r) => r.round === m.round);
+  if (!round) throw new Error("Round not found");
+  const isLastRound = m.round === winnersRounds[winnersRounds.length - 1].round;
+
+  if (!isLastRound) {
+    const nextRound = winnersRounds.find((r) => r.round === m.round + 1);
+    if (!nextRound) throw new Error("Next round not found");
+    const targetIndex = Math.floor(m.index / 2);
+    const targetMatch = nextRound.matches[targetIndex];
+    if (!targetMatch) throw new Error("Target match not found");
+    // Safe only if next match is not completed and has no winner decided
+    if (targetMatch.status === "completed" || targetMatch.winnerId) {
+      throw new Error("Cannot override: next match already decided");
+    }
+    // Replace the slot where the current winner was placed
+    if (m.index % 2 === 0) {
+      if (targetMatch.team1Id !== currentWinner) {
+        throw new Error("Cannot override: winner slot no longer matches expectations");
+      }
+      targetMatch.team1Id = newWinnerId;
+    } else {
+      if (targetMatch.team2Id !== currentWinner) {
+        throw new Error("Cannot override: winner slot no longer matches expectations");
+      }
+      targetMatch.team2Id = newWinnerId;
+    }
+  }
+  // Update current match
+  if (typeof score1 === "number") m.score1 = score1;
+  if (typeof score2 === "number") m.score2 = score2;
+  m.winnerId = newWinnerId;
+
+  log(
+    actorId,
+    "override_winner",
+    `Match ${m.id} winner overridden to ${newWinnerId} (scores: ${m.score1 ?? ""}-${
+      m.score2 ?? ""
+    })`
+  );
+  broadcastBracket(tournamentId);
+  return m;
+}
+
 // Utility for tests to clear mock state
 export function resetState() {
   registrations.splice(0, registrations.length)
   for (const k of Object.keys(brackets)) delete brackets[k]
   for (const k of Object.keys(bracketSubscribers)) delete bracketSubscribers[k]
   auditLogs.splice(0, auditLogs.length)
+}
+
+// ---------- Payout Logic ----------
+function parsePrizePool(value?: string | number): number {
+  if (typeof value === "number") return value;
+  if (!value) return 0;
+  // extract digits and decimal point; ignore currency symbols and commas
+  const cleaned = String(value).replace(/[^0-9.]/g, "");
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function computePlacementsSingle(b: Bracket): { first?: string; second?: string; thirds: string[] } {
+  const winners = b.rounds.winners;
+  if (!winners.length) return { first: undefined, second: undefined, thirds: [] };
+  const finalRound = winners[winners.length - 1];
+  const finalMatch = finalRound.matches[finalRound.matches.length - 1];
+  const first = finalMatch?.winnerId;
+  const second = first
+    ? (finalMatch.team1Id === first ? finalMatch.team2Id : finalMatch.team1Id) || undefined
+    : undefined;
+  const thirds: string[] = [];
+  if (winners.length >= 2) {
+    const semiRound = winners[winners.length - 2];
+    for (const m of semiRound.matches) {
+      if (m.team1Id && m.team2Id && m.winnerId) {
+        const loser = m.winnerId === m.team1Id ? m.team2Id : m.team1Id;
+        if (loser) thirds.push(loser);
+      }
+    }
+  }
+  return { first, second, thirds };
+}
+
+function computePlacementsDouble(b: Bracket): { first?: string; second?: string; third?: string } {
+  const grand = b.rounds.grand?.[0]?.matches?.[0];
+  const first = grand?.winnerId;
+  const second = first
+    ? (grand?.team1Id === first ? grand?.team2Id : grand?.team1Id) || undefined
+    : undefined;
+  // losers bracket final: last losers round's last match; loser is 3rd
+  let third: string | undefined;
+  const losersRounds = b.rounds.losers || [];
+  if (losersRounds.length) {
+    const lastLosersRound = losersRounds[losersRounds.length - 1];
+    const lm = lastLosersRound.matches[lastLosersRound.matches.length - 1];
+    if (lm && lm.team1Id && lm.team2Id && lm.winnerId) {
+      third = lm.winnerId === lm.team1Id ? lm.team2Id : lm.team1Id;
+    }
+  }
+  return { first, second, third };
+}
+
+export function endTournamentAndPayout(tournamentId: string) {
+  const t = getTournament(tournamentId);
+  if (!t) throw new Error("Tournament not found");
+  const b = getBracket(tournamentId);
+  if (!b) throw new Error("Bracket not generated");
+  // idempotent: if payout already recorded, return it
+  if (t.payout && t.payout.awards?.length) {
+    return t.payout;
+  }
+
+  const total = parsePrizePool(t.prizePool);
+  if (!total || total <= 0) throw new Error("No prize pool set for this tournament");
+
+  let awards: Array<{ teamId: string; amount: number }> = [];
+  if (b.kind === "double") {
+    const { first, second, third } = computePlacementsDouble(b);
+    if (!first || !second) throw new Error("Final not completed yet");
+    awards.push({ teamId: first, amount: +(total * 0.6).toFixed(2) });
+    awards.push({ teamId: second, amount: +(total * 0.25).toFixed(2) });
+    if (third) awards.push({ teamId: third, amount: +(total * 0.15).toFixed(2) });
+  } else {
+    const { first, second, thirds } = computePlacementsSingle(b);
+    if (!first || !second) throw new Error("Final not completed yet");
+    awards.push({ teamId: first, amount: +(total * 0.6).toFixed(2) });
+    awards.push({ teamId: second, amount: +(total * 0.25).toFixed(2) });
+    if (thirds.length) {
+      const thirdShareTotal = total * 0.15;
+      const perTeam = +(thirdShareTotal / thirds.length).toFixed(2);
+      thirds.forEach((tid) => awards.push({ teamId: tid, amount: perTeam }));
+    }
+  }
+
+  // Apply awards to team balances
+  for (const award of awards) {
+    const team = teams.find((tm) => tm.id === award.teamId);
+    if (team) {
+      team.balance = +(Number(team.balance || 0) + award.amount).toFixed(2);
+      log(award.teamId, "payout", `Awarded ${award.amount} from ${t.title}`);
+    }
+  }
+  const payout = {
+    total: +total.toFixed(2),
+    awards,
+    timestamp: new Date().toISOString(),
+  };
+  t.payout = payout;
+  if (t.status !== "completed") t.status = "completed";
+  log("system", "end_tournament", `Payout distributed for ${t.title} (${t.id})`);
+  return payout;
 }

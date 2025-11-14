@@ -35,6 +35,7 @@ export default function TournamentDetailPage() {
   const [starting, setStarting] = useState(false);
   const [format, setFormat] = useState<"single" | "double">("single");
   const [managerTeams, setManagerTeams] = useState<Array<{id:string; name:string}>>([]);
+  const [ending, setEnding] = useState(false);
 
   // Load teams for team manager picker
   useEffect(() => {
@@ -111,6 +112,37 @@ export default function TournamentDetailPage() {
       toast.error(e?.message || "Failed to start tournament");
     } finally {
       setStarting(false);
+    }
+  };
+
+  const canEndTournament = (() => {
+    if (!bracket) return false;
+    if (bracket.kind === "single") {
+      const rounds = bracket.rounds.winners;
+      if (!rounds?.length) return false;
+      const finalMatch = rounds[rounds.length - 1].matches.slice(-1)[0];
+      return !!finalMatch && finalMatch.status === "completed";
+    } else {
+      const gm = bracket.rounds.grand?.[0]?.matches?.[0];
+      return !!gm && gm.status === "completed";
+    }
+  })();
+
+  const handleEnd = async () => {
+    if (!id) return;
+    setEnding(true);
+    try {
+      const payout = await api.endTournament(id);
+      const summary = payout.awards
+        .map((a) => `${a.teamId}: $${a.amount.toFixed(2)}`)
+        .join("\n");
+      toast.success(`Payout distributed ($${payout.total.toFixed(2)}):\n${summary}`);
+      const data = await api.getTournament(id);
+      setTournament(data);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to end tournament");
+    } finally {
+      setEnding(false);
     }
   };
 
@@ -285,7 +317,7 @@ export default function TournamentDetailPage() {
               <CardHeader>
                 <CardTitle>Admin Controls</CardTitle>
                 <CardDescription>
-                  Start the tournament and generate the bracket
+                  Start the tournament and generate the bracket. When the final is complete, distribute prizes.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -310,6 +342,14 @@ export default function TournamentDetailPage() {
                   disabled={starting || tournament.status !== "upcoming"}
                 >
                   {starting ? "Starting..." : "Start Tournament"}
+                </Button>
+                <Button
+                  className="w-full"
+                  variant="secondary"
+                  onClick={handleEnd}
+                  disabled={!canEndTournament || ending}
+                >
+                  {ending ? "Ending..." : "End Tournament & Payout"}
                 </Button>
               </CardContent>
             </Card>

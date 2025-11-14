@@ -300,6 +300,22 @@ class ApiClient {
     );
   }
 
+  async overrideMatch(
+    tournamentId: string,
+    matchId: string,
+    winnerId: string,
+    score1?: number,
+    score2?: number
+  ) {
+    const body: Record<string, any> = { winnerId };
+    if (typeof score1 === "number") body.score1 = score1;
+    if (typeof score2 === "number") body.score2 = score2;
+    return this.request<Match>(
+      `/api/tournaments/${tournamentId}/matches/${matchId}/override`,
+      { method: "POST", body: JSON.stringify(body) }
+    );
+  }
+
   subscribeBracket(
     tournamentId: string,
     onUpdate: (bracket: Bracket) => void
@@ -321,6 +337,13 @@ class ApiClient {
     return this.request(`/api/tournaments/${id}`, {
       method: "DELETE",
     });
+  }
+
+  async endTournament(id: string) {
+    return this.request<{ total: number; awards: Array<{ teamId: string; amount: number }>; timestamp: string }>(
+      `/api/tournaments/${id}/end`,
+      { method: "POST" }
+    );
   }
 
   // Team endpoints

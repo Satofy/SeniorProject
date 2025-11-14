@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface BracketViewerProps {
   tournamentId: string;
@@ -17,6 +18,8 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
   const [bracket, setBracket] = useState<Bracket | null>(initial || null);
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [overrideMatch, setOverrideMatch] = useState<Match | null>(null);
+  const [overrideWinner, setOverrideWinner] = useState<string>("");
   const score1Ref = useRef<HTMLInputElement | null>(null);
   const score2Ref = useRef<HTMLInputElement | null>(null);
   const editScore1Ref = useRef<HTMLInputElement | null>(null);
@@ -146,14 +149,25 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                             </Button>
                           )}
                         {isAdmin && m.status === "completed" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="mt-2 w-full"
-                            onClick={() => setEditingMatch(m)}
-                          >
-                            Edit
-                          </Button>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingMatch(m)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setOverrideMatch(m);
+                                setOverrideWinner(m.winnerId || "");
+                              }}
+                            >
+                              Override
+                            </Button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -270,6 +284,70 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                       setEditingMatch(null);
                     } catch (e: any) {
                       toast.error(e?.message || "Failed to edit scores");
+                    }
+                  }}
+                >
+                  Save
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Override Winner (Admin) */}
+      <Dialog open={!!overrideMatch} onOpenChange={(o) => !o && setOverrideMatch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Override Winner (Admin)</DialogTitle>
+          </DialogHeader>
+          {overrideMatch && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                {overrideMatch.team1Id || "TBD"} vs {overrideMatch.team2Id || "TBD"}
+              </div>
+              <div>
+                <label className="text-xs mb-1 block">New Winner</label>
+                <Select value={overrideWinner} onValueChange={setOverrideWinner}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select winner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {overrideMatch.team1Id && (
+                      <SelectItem value={overrideMatch.team1Id}>{nameFor(overrideMatch.team1Id)}</SelectItem>
+                    )}
+                    {overrideMatch.team2Id && (
+                      <SelectItem value={overrideMatch.team2Id}>{nameFor(overrideMatch.team2Id)}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs mb-1 block">Score {overrideMatch.team1Id || "T1"}</label>
+                  <Input type="number" min={0} defaultValue={typeof overrideMatch.score1 === "number" ? overrideMatch.score1 : 0} ref={editScore1Ref} />
+                </div>
+                <div>
+                  <label className="text-xs mb-1 block">Score {overrideMatch.team2Id || "T2"}</label>
+                  <Input type="number" min={0} defaultValue={typeof overrideMatch.score2 === "number" ? overrideMatch.score2 : 0} ref={editScore2Ref} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setOverrideMatch(null)}>Cancel</Button>
+                <Button
+                  onClick={async () => {
+                    if (!overrideWinner) {
+                      toast.error("Pick a winner");
+                      return;
+                    }
+                    const s1 = Number(editScore1Ref.current?.value);
+                    const s2 = Number(editScore2Ref.current?.value);
+                    try {
+                      await api.overrideMatch(tournamentId, overrideMatch.id, overrideWinner, s1, s2);
+                      toast.success("Winner overridden");
+                      setOverrideMatch(null);
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to override winner");
                     }
                   }}
                 >
