@@ -16,9 +16,11 @@ interface BracketViewerProps {
 export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerProps) {
   const [bracket, setBracket] = useState<Bracket | null>(initial || null);
   const [reportingMatch, setReportingMatch] = useState<Match | null>(null);
-  const [resetTarget, setResetTarget] = useState<Match | null>(null);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const score1Ref = useRef<HTMLInputElement | null>(null);
   const score2Ref = useRef<HTMLInputElement | null>(null);
+  const editScore1Ref = useRef<HTMLInputElement | null>(null);
+  const editScore2Ref = useRef<HTMLInputElement | null>(null);
   const [teamsById, setTeamsById] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -77,14 +79,7 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
   };
 
   const performReset = async () => {
-    if (!resetTarget) return;
-    try {
-      await api.resetMatch(tournamentId, resetTarget.id);
-      toast.success("Match reset");
-      setResetTarget(null);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to reset");
-    }
+    // No longer used; kept as noop placeholder if referenced
   };
 
   if (!bracket) return <div className="text-sm text-muted-foreground">No bracket yet.</div>;
@@ -155,45 +150,11 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                             size="sm"
                             variant="ghost"
                             className="mt-2 w-full"
-                            onClick={() => setResetTarget(m)}
+                            onClick={() => setEditingMatch(m)}
                           >
-                            Reset
+                            Edit
                           </Button>
                         )}
-                        {/* Reset Confirm Dialog */}
-                        <Dialog
-                          open={!!resetTarget}
-                          onOpenChange={(o) => !o && setResetTarget(null)}
-                        >
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Confirm Reset</DialogTitle>
-                            </DialogHeader>
-                            {resetTarget && (
-                              <div className="space-y-4 text-sm">
-                                <p>
-                                  Reset match <strong>{resetTarget.id}</strong>?
-                                  This will clear scores and winner. You cannot
-                                  reset if the winner already propagated.
-                                </p>
-                                <div className="flex gap-2 justify-end">
-                                  <Button
-                                    variant="outline"
-                                    onClick={() => setResetTarget(null)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    variant="destructive"
-                                    onClick={performReset}
-                                  >
-                                    Reset
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
                       </div>
                     ))}
                   </div>
@@ -250,6 +211,70 @@ export function BracketViewer({ tournamentId, initial, isAdmin }: BracketViewerP
                   Cancel
                 </Button>
                 <Button onClick={submitReport}>Submit</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Score Dialog */}
+      <Dialog open={!!editingMatch} onOpenChange={(o) => !o && setEditingMatch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Match Score</DialogTitle>
+          </DialogHeader>
+          {editingMatch && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                {editingMatch.team1Id || "TBD"} vs {editingMatch.team2Id || "TBD"}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs mb-1 block">
+                    Score {editingMatch.team1Id || "T1"}
+                  </label>
+                  <Input
+                    type="number"
+                    ref={editScore1Ref}
+                    min={0}
+                    defaultValue={typeof editingMatch.score1 === "number" ? editingMatch.score1 : 0}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs mb-1 block">
+                    Score {editingMatch.team2Id || "T2"}
+                  </label>
+                  <Input
+                    type="number"
+                    ref={editScore2Ref}
+                    min={0}
+                    defaultValue={typeof editingMatch.score2 === "number" ? editingMatch.score2 : 0}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingMatch(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    const s1 = Number(editScore1Ref.current?.value);
+                    const s2 = Number(editScore2Ref.current?.value);
+                    if (Number.isNaN(s1) || Number.isNaN(s2)) {
+                      toast.error("Enter numeric scores");
+                      return;
+                    }
+                    try {
+                      await api.editMatch(tournamentId, editingMatch.id, s1, s2);
+                      toast.success("Scores updated");
+                      setEditingMatch(null);
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to edit scores");
+                    }
+                  }}
+                >
+                  Save
+                </Button>
               </DialogFooter>
             </div>
           )}

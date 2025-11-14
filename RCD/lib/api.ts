@@ -288,6 +288,18 @@ class ApiClient {
     );
   }
 
+  async editMatch(
+    tournamentId: string,
+    matchId: string,
+    score1: number,
+    score2: number
+  ) {
+    return this.request<Match>(
+      `/api/tournaments/${tournamentId}/matches/${matchId}/edit`,
+      { method: "POST", body: JSON.stringify({ score1, score2 }) }
+    );
+  }
+
   subscribeBracket(
     tournamentId: string,
     onUpdate: (bracket: Bracket) => void

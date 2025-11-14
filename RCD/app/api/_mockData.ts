@@ -778,6 +778,53 @@ export function resetMatch(
   return m;
 }
 
+export function editMatchScore(
+  tournamentId: string,
+  matchId: string,
+  score1: number,
+  score2: number,
+  actorId: string = "system"
+) {
+  const b = brackets[tournamentId];
+  if (!b) throw new Error("Bracket not found");
+  const m = findMatch(tournamentId, matchId);
+  if (!m) throw new Error("Match not found");
+  if (m.status !== "completed") throw new Error("Match is not completed yet");
+  if (!m.team1Id && !m.team2Id) throw new Error("Match has no participants");
+
+  // Compute what winner would be with the new scores
+  let newWinner: string | undefined = m.winnerId;
+  if (typeof score1 === "number" && typeof score2 === "number") {
+    if (m.team1Id && m.team2Id) {
+      if (score1 === score2) {
+        // Keep existing winner on tie to avoid changing propagation
+        newWinner = m.winnerId;
+      } else {
+        newWinner = score1 > score2 ? m.team1Id! : m.team2Id!;
+      }
+    } else {
+      // bye scenario: keep existing winner
+      newWinner = m.winnerId;
+    }
+  }
+
+  if (newWinner !== m.winnerId) {
+    // For simplicity and safety, disallow changing winner via edit to avoid re-propagation complexity
+    throw new Error("Cannot edit scores to change winner after completion");
+  }
+
+  m.score1 = score1;
+  m.score2 = score2;
+  // Keep existing winnerId and completedAt
+  log(
+    actorId,
+    "edit_match_score",
+    `Match ${m.id} scores edited to ${score1}-${score2} (winner remains ${m.winnerId})`
+  );
+  broadcastBracket(tournamentId);
+  return m;
+}
+
 // Utility for tests to clear mock state
 export function resetState() {
   registrations.splice(0, registrations.length)
