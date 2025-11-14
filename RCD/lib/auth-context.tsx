@@ -1,6 +1,13 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+  useCallback,
+} from "react";
 import { api, type User } from "./api"
 import { useRouter } from "next/navigation"
 
@@ -20,58 +27,78 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const fetchUser = async () => {
     try {
-      const currentUser = await api.getCurrentUser()
-      setUser(currentUser)
+      const currentUser = await api.getCurrentUser();
+      setUser(currentUser);
     } catch (error) {
-      setUser(null)
+      setUser(null);
       if (typeof window !== "undefined") {
-        localStorage.removeItem("rcd_token")
+        localStorage.removeItem("rcd_token");
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem("rcd_token")) {
-      fetchUser()
+      fetchUser();
     } else {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   const login = async (email: string, password: string) => {
-    const { user: loggedInUser } = await api.login(email, password)
-    setUser(loggedInUser)
-    router.push("/dashboard")
-  }
+    const { user: loggedInUser } = await api.login(email, password);
+    setUser(loggedInUser);
+    router.push("/dashboard");
+  };
 
-  const register = async (email: string, password: string, username?: string) => {
-    const { user: registeredUser } = await api.register(email, password, username)
-    setUser(registeredUser)
-    router.push("/dashboard")
-  }
+  const register = async (
+    email: string,
+    password: string,
+    username?: string
+  ) => {
+    const { user: registeredUser } = await api.register(
+      email,
+      password,
+      username
+    );
+    setUser(registeredUser);
+    router.push("/dashboard");
+  };
 
   const logout = () => {
-    api.logout()
-    setUser(null)
-    router.push("/")
-  }
+    api.logout();
+    setUser(null);
+    router.push("/");
+  };
 
   const refreshUser = async () => {
-    await fetchUser()
-  }
+    await fetchUser();
+  };
 
-  const isAdmin = user?.role === "admin"
-  const isTeamManager = user?.role === "team_manager"
-  const isPlayer = user?.role === "player"
-  const isGuest = !user || user?.role === "guest"
+  // Listen for team approval event to refresh user (updates teamId immediately after notification)
+  const handleTeamApproved = useCallback(() => {
+    refreshUser();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.addEventListener("rcd:team-approved", handleTeamApproved);
+    return () =>
+      window.removeEventListener("rcd:team-approved", handleTeamApproved);
+  }, [handleTeamApproved]);
+
+  const isAdmin = user?.role === "admin";
+  const isTeamManager = user?.role === "team_manager";
+  const isPlayer = user?.role === "player";
+  const isGuest = !user || user?.role === "guest";
 
   return (
     <AuthContext.Provider
@@ -90,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export function useAuth() {

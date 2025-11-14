@@ -8,6 +8,7 @@ import React, {
   useEffect,
 } from "react";
 import { api } from "./api";
+import { toast } from "sonner";
 
 // Lightweight stub aligning with esports-rcd-frontend interface to satisfy imports in shared code builds.
 export type Notification = {
@@ -79,6 +80,21 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       const res = await fetch("/api/notifications", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        // Unauthorized - clear client notifications silently
+        setNotifications([]);
+        return;
+      }
+      if (res.status >= 500) {
+        try {
+          const err = await res.json().catch(() => ({}));
+          console.error("Notifications fetch server error", err);
+          toast("Failed to load notifications", {
+            description: err.message || `HTTP ${res.status}`,
+          });
+        } catch {}
+        return;
+      }
       if (res.ok) {
         const raw = await res.json();
         const mapped: Notification[] = raw.map((r: any) => ({
@@ -93,13 +109,34 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
               }
             : undefined,
         }));
-        // Merge without duplicating existing IDs
+        // Merge without duplicating existing IDs, track newly added
         setNotifications((prev) => {
           const ids = new Set(prev.map((p) => p.id));
-          (mapped || [])
-            .filter((m) => !ids.has(m.id))
-            .forEach((m) => prev.unshift(m));
-          return [...prev];
+          const newlyAdded: Notification[] = [];
+          for (const m of mapped) {
+            if (!ids.has(m.id)) {
+              newlyAdded.push(m);
+            }
+          }
+          // Prepend newest first
+          const next = [...newlyAdded, ...prev];
+          // Toast and dispatch events for approvals
+          newlyAdded.forEach((n) => {
+            try {
+              toast(n.message, {
+                description: new Date(n.createdAt).toLocaleString(),
+              });
+            } catch {}
+            if (
+              n.type === "success" &&
+              /approved to join team/i.test(n.message)
+            ) {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("rcd:team-approved"));
+              }
+            }
+          });
+          return next;
         });
       }
     } catch (e) {
@@ -118,9 +155,23 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     return () => clearInterval(interval);
   }, [load]);
 
-  const unreadCount = notifications.length
-  const value = useMemo(() => ({ notifications, unreadCount, dismiss, refresh, clearAll, addNotification }), [notifications, unreadCount, dismiss, refresh, clearAll, addNotification])
-  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>
+  const unreadCount = notifications.length;
+  const value = useMemo(
+    () => ({
+      notifications,
+      unreadCount,
+      dismiss,
+      refresh,
+      clearAll,
+      addNotification,
+    }),
+    [notifications, unreadCount, dismiss, refresh, clearAll, addNotification]
+  );
+  return (
+    <NotificationsContext.Provider value={value}>
+      {children}
+    </NotificationsContext.Provider>
+  );
 }
 
 export function useNotifications() {
