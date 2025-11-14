@@ -21,6 +21,7 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/notifications-context";
+import { api, type JoinRequest } from "@/lib/api";
 
 type NavLink = {
   href: string;
@@ -79,6 +80,8 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [managerRequests, setManagerRequests] = useState<Array<JoinRequest & { team?: any; user?: any }>>([])
+  const [managerUnread, setManagerUnread] = useState(0)
 
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
@@ -100,6 +103,25 @@ export function Navbar() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Poll manager join requests
+  useEffect(() => {
+    let interval: any;
+    const load = async () => {
+      if (!user || user.role !== 'team_manager') return;
+      try {
+        const data = await api.getManagerJoinRequests();
+        setManagerRequests(data);
+        setManagerUnread(data.length);
+      } catch {
+        setManagerRequests([]);
+        setManagerUnread(0);
+      }
+    };
+    load();
+    interval = setInterval(load, 15000);
+    return () => interval && clearInterval(interval);
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -153,14 +175,12 @@ export function Navbar() {
                     aria-haspopup="true"
                   >
                     <Bell className="h-4 w-4" />
-                    {unreadCount > 0 ? (
+                    {(unreadCount + managerUnread) > 0 ? (
                       <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
-                        {unreadCount}
+                        {unreadCount + managerUnread}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
-                        No alerts
-                      </span>
+                      <span className="text-xs text-muted-foreground">No alerts</span>
                     )}
                     <ChevronDown className="h-4 w-4 opacity-70" />
                   </Button>
@@ -188,6 +208,30 @@ export function Navbar() {
                         </div>
                       </div>
                       <div className="max-h-80 overflow-y-auto">
+                        {/* Manager join requests */}
+                        {user?.role === 'team_manager' && (
+                          <div className="px-4 py-3 border-b border-border">
+                            <p className="text-xs font-semibold mb-2">Join Requests</p>
+                            {managerRequests.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">None</p>
+                            ) : (
+                              managerRequests.map(r => (
+                                <div key={r.id} className="mb-2 last:mb-0">
+                                  <p className="text-xs font-medium truncate">{r.user?.email || r.userId} → {r.team?.name || r.teamId}</p>
+                                  <div className="flex gap-2 mt-1">
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={async () => { await api.approveJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); setManagerUnread(u => u - 1); }}>
+                                      Approve
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={async () => { await api.declineJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); setManagerUnread(u => u - 1); }}>
+                                      Decline
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                        {/* General notifications */}
                         {notifications.length === 0 ? (
                           <p className="px-4 py-6 text-sm text-muted-foreground">
                             You are all caught up.
@@ -205,9 +249,7 @@ export function Navbar() {
                                   </p>
                                   {notification.createdAt && (
                                     <p className="text-xs text-muted-foreground">
-                                      {new Date(
-                                        notification.createdAt
-                                      ).toLocaleString()}
+                                      {new Date(notification.createdAt).toLocaleString()}
                                     </p>
                                   )}
                                 </div>
@@ -220,20 +262,19 @@ export function Navbar() {
                                   ×
                                 </button>
                               </div>
-                              {notification.actionLabel &&
-                                notification.onAction && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 px-3 text-xs"
-                                    onClick={() => {
-                                      notification.onAction?.();
-                                      setNotificationsOpen(false);
-                                    }}
-                                  >
-                                    {notification.actionLabel}
-                                  </Button>
-                                )}
+                              {notification.actionLabel && notification.onAction && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    notification.onAction?.();
+                                    setNotificationsOpen(false);
+                                  }}
+                                >
+                                  {notification.actionLabel}
+                                </Button>
+                              )}
                             </div>
                           ))
                         )}

@@ -351,6 +351,12 @@ class ApiClient {
     });
   }
 
+  async getManagerJoinRequests() {
+    return this.request<Array<JoinRequest & { team?: Team; user?: User }>>(
+      `/api/teams/manager/requests`
+    );
+  }
+
   async approveJoinRequest(teamId: string, requestId: string) {
     return this.request(`/api/teams/${teamId}/requests/${requestId}/approve`, {
       method: "POST",

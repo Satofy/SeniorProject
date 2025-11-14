@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Shield, UserPlus } from "lucide-react"
+import { ArrowLeft, Shield, UserPlus, Check, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 export default function TeamDetailPage() {
@@ -19,6 +19,9 @@ export default function TeamDetailPage() {
   const [team, setTeam] = useState<Team | null>(null)
   const [loading, setLoading] = useState(true)
   const [requesting, setRequesting] = useState(false)
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
+  const [loadingRequests, setLoadingRequests] = useState(false)
+  const [refreshToggle, setRefreshToggle] = useState(0)
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -36,6 +39,24 @@ export default function TeamDetailPage() {
 
     fetchTeam();
   }, [id, router]);
+
+  // Load pending join requests if manager
+  useEffect(() => {
+    const loadRequests = async () => {
+      if (!id || !user) return;
+      if (user.id !== team?.managerId) return;
+      setLoadingRequests(true);
+      try {
+        const list = await api.getTeamJoinRequests(id);
+        setPendingRequests(list.filter(r => r.status === 'pending'));
+      } catch {
+        setPendingRequests([]);
+      } finally {
+        setLoadingRequests(false);
+      }
+    };
+    loadRequests();
+  }, [id, user, team?.managerId, refreshToggle]);
 
   const handleRequestToJoin = async () => {
     if (!user) {
@@ -76,6 +97,32 @@ export default function TeamDetailPage() {
   }
 
   const isManager = user?.id === team.managerId
+  const refreshRequests = () => setRefreshToggle(t => t + 1)
+
+  const approve = async (reqId: string) => {
+    if (!id) return;
+    try {
+      await api.approveJoinRequest(id, reqId);
+      toast.success('Request approved');
+      refreshRequests();
+      // refresh team members
+      const data = await api.getTeam(id);
+      setTeam(data)
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to approve');
+    }
+  }
+
+  const decline = async (reqId: string) => {
+    if (!id) return;
+    try {
+      await api.declineJoinRequest(id, reqId);
+      toast.info('Request declined');
+      refreshRequests();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to decline');
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -186,6 +233,42 @@ export default function TeamDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {isManager && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle>Pending Requests</CardTitle>
+                <CardDescription>Approve or decline player join requests</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {loadingRequests ? (
+                  <p className="text-muted-foreground">Loading...</p>
+                ) : pendingRequests.length === 0 ? (
+                  <p className="text-muted-foreground">No pending requests</p>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingRequests.map(r => (
+                      <div key={r.id} className="flex items-center justify-between rounded border px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{r.user?.email || r.userId}</p>
+                          <p className="text-xs text-muted-foreground">Requested {new Date(r.createdAt).toLocaleString()}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => approve(r.id)}>
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => decline(r.id)}>
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Button variant="outline" size="sm" onClick={refreshRequests} className="w-full">Refresh Requests</Button>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-primary/20">
             <CardHeader>

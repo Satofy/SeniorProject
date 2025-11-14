@@ -260,6 +260,16 @@ export function approveTeamJoinRequest(teamId: string, requestId: string) {
   return req
 }
 
+export function listManagerPendingRequests(managerId: string) {
+  const managedTeams = teams.filter(t => t.managerId === managerId).map(t => t.id)
+  const pending = joinRequests.filter(r => r.status === "pending" && managedTeams.includes(r.teamId))
+  return pending.map(r => ({
+    ...r,
+    user: users.find(u => u.id === r.userId),
+    team: teams.find(t => t.id === r.teamId),
+  }))
+}
+
 export function declineTeamJoinRequest(teamId: string, requestId: string) {
   const team = getTeam(teamId)
   if (!team) throw new Error("Team not found")
