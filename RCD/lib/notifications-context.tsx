@@ -12,13 +12,14 @@ import { toast } from "sonner";
 
 // Lightweight stub aligning with esports-rcd-frontend interface to satisfy imports in shared code builds.
 export type Notification = {
-  id: string
-  type: 'info' | 'warning' | 'success' | 'action'
-  message: string
-  createdAt: string
-  actionLabel?: string
-  onAction?: () => void
-}
+  id: string;
+  type: "info" | "warning" | "success" | "action";
+  message: string;
+  createdAt: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  read?: boolean;
+};
 
 type NotificationsContextValue = {
   notifications: Notification[];
@@ -26,6 +27,7 @@ type NotificationsContextValue = {
   dismiss: (id: string) => void;
   refresh: () => Promise<void>;
   clearAll: () => Promise<void>;
+  markAllRead: () => Promise<void>;
   addNotification: (notification: {
     message: string;
     type?: Notification["type"];
@@ -36,19 +38,26 @@ type NotificationsContextValue = {
   }) => void;
 };
 
-const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined)
+const NotificationsContext = createContext<
+  NotificationsContextValue | undefined
+>(undefined);
 
 function uuid() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
-  return Math.random().toString(36).slice(2)
+  if (typeof crypto !== "undefined" && crypto.randomUUID)
+    return crypto.randomUUID();
+  return Math.random().toString(36).slice(2);
 }
 
-export function NotificationsProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+export function NotificationsProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const dismiss = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id))
-  }, [])
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
   const clearAll = useCallback(async () => {
     setNotifications([]);
     try {
@@ -60,11 +69,25 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       });
     } catch {}
   }, []);
-  const addNotification: NotificationsContextValue['addNotification'] = useCallback((n) => {
-    const id = n.id || uuid()
-    const createdAt = n.createdAt ? new Date(n.createdAt).toISOString() : new Date().toISOString()
-    setNotifications(prev => [{ id, type: n.type || 'info', message: n.message, createdAt, actionLabel: n.actionLabel, onAction: n.onAction }, ...prev.filter(x => x.id !== id)])
-  }, [])
+  const addNotification: NotificationsContextValue["addNotification"] =
+    useCallback((n) => {
+      const id = n.id || uuid();
+      const createdAt = n.createdAt
+        ? new Date(n.createdAt).toISOString()
+        : new Date().toISOString();
+      setNotifications((prev) => [
+        {
+          id,
+          type: n.type || "info",
+          message: n.message,
+          createdAt,
+          actionLabel: n.actionLabel,
+          onAction: n.onAction,
+          read: false,
+        },
+        ...prev.filter((x) => x.id !== id),
+      ]);
+    }, []);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -108,6 +131,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
                 window.location.href = `/teams/${r.teamId}`;
               }
             : undefined,
+          read: typeof r.read === "boolean" ? r.read : false,
         }));
         // Merge without duplicating existing IDs, track newly added
         setNotifications((prev) => {
@@ -149,13 +173,28 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     await load();
   }, [load]);
 
+  const markAllRead = useCallback(async () => {
+    try {
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("rcd_token")
+          : null;
+      if (!token) return;
+      await fetch("/api/notifications/read", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch {}
+  }, []);
+
   useEffect(() => {
     load();
     const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
   }, [load]);
 
-  const unreadCount = notifications.length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
   const value = useMemo(
     () => ({
       notifications,
@@ -164,8 +203,17 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       refresh,
       clearAll,
       addNotification,
+      markAllRead,
     }),
-    [notifications, unreadCount, dismiss, refresh, clearAll, addNotification]
+    [
+      notifications,
+      unreadCount,
+      dismiss,
+      refresh,
+      clearAll,
+      addNotification,
+      markAllRead,
+    ]
   );
   return (
     <NotificationsContext.Provider value={value}>
@@ -175,7 +223,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 }
 
 export function useNotifications() {
-  const ctx = useContext(NotificationsContext)
+  const ctx = useContext(NotificationsContext);
   if (ctx) return ctx;
   // Fallback no-op context to avoid hard crashes if provider isn't mounted yet
   return {
@@ -184,6 +232,7 @@ export function useNotifications() {
     dismiss: () => {},
     refresh: async () => {},
     clearAll: async () => {},
+    markAllRead: async () => {},
     addNotification: () => {},
   };
 }

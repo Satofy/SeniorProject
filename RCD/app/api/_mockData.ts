@@ -211,6 +211,7 @@ export type UserNotification = {
   createdAt: string;
   teamId?: string;
   requestId?: string;
+  read?: boolean;
 };
 export const userNotifications: Record<string, UserNotification[]> =
   STORE.userNotifications;
@@ -229,6 +230,7 @@ function notify(
       : new Date().toISOString(),
     teamId: n.teamId,
     requestId: n.requestId,
+    read: false,
   };
   userNotifications[userId].unshift(note);
   return note;
@@ -240,6 +242,19 @@ export function listUserNotifications(userId: string) {
 
 export function clearUserNotifications(userId: string) {
   userNotifications[userId] = [];
+}
+
+export function markAllNotificationsRead(userId: string) {
+  const list = userNotifications[userId];
+  if (!list) return 0;
+  let count = 0;
+  for (const n of list) {
+    if (!n.read) {
+      n.read = true;
+      count++;
+    }
+  }
+  return count;
 }
 
 function log(user: string, action: string, details?: string) {

@@ -73,8 +73,14 @@ function ThemeToggle() {
 export function Navbar() {
   const { user, logout, isAdmin } = useAuth()
   const router = useRouter();
-  const { notifications, unreadCount, dismiss, refresh, clearAll } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    dismiss,
+    refresh,
+    clearAll,
+    markAllRead,
+  } = useNotifications();
   const displayName = user?.username || user?.email || "Account";
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -169,7 +175,7 @@ export function Navbar() {
                     className="flex items-center gap-2 px-3 py-1 text-sm"
                     onClick={() => {
                       setNotificationsOpen((prev) => !prev);
-                      refresh();
+                      refresh().then(() => markAllRead());
                     }}
                     aria-expanded={notificationsOpen}
                     aria-haspopup="true"

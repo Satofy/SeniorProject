@@ -241,6 +241,10 @@ export default function TeamDetailPage() {
                   <p className="text-sm text-green-600 text-center font-medium">
                     You are a member of this team
                   </p>
+                ) : user.teamId && user.teamId !== team.id ? (
+                  <p className="text-sm text-muted-foreground text-center">
+                    You are already a member of another team
+                  </p>
                 ) : myPending ? (
                   <div className="flex flex-col items-center gap-2 text-center">
                     <Clock className="w-5 h-5 text-yellow-500" />
