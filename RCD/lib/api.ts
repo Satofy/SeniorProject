@@ -23,6 +23,11 @@ export interface Tournament {
   currentParticipants?: number
   prizePool?: string
   game?: string
+  payout?: {
+    total: number
+    awards: Array<{ place: number; teamId: string; amount: number }>
+    timestamp: string
+  }
 }
 
 export type BracketSide = "winners" | "losers" | "grand";
@@ -169,6 +174,16 @@ class ApiClient {
       currentParticipants: typeof current === "number" ? current : undefined,
       prizePool: raw.prizePool || raw.prize_pool || undefined,
       game: raw.game || undefined,
+      // Pass through payout if present
+      ...(raw.payout
+        ? {
+            payout: {
+              total: raw.payout.total,
+              awards: raw.payout.awards,
+              timestamp: raw.payout.timestamp,
+            },
+          }
+        : {}),
     };
   }
 
@@ -340,7 +355,7 @@ class ApiClient {
   }
 
   async endTournament(id: string) {
-    return this.request<{ total: number; awards: Array<{ teamId: string; amount: number }>; timestamp: string }>(
+    return this.request<{ total: number; awards: Array<{ place: number; teamId: string; amount: number }>; timestamp: string }>(
       `/api/tournaments/${id}/end`,
       { method: "POST" }
     );

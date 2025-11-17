@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useParams, useRouter } from "next/navigation"
-import { Trophy, Calendar, Users, ArrowLeft, DollarSign, Gamepad2 } from "lucide-react"
+import { Trophy, Calendar, Users, ArrowLeft, DollarSign, Gamepad2, Award } from "lucide-react"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -36,6 +36,7 @@ export default function TournamentDetailPage() {
   const [format, setFormat] = useState<"single" | "double">("single");
   const [managerTeams, setManagerTeams] = useState<Array<{id:string; name:string}>>([]);
   const [ending, setEnding] = useState(false);
+  const [teamNames, setTeamNames] = useState<Record<string, string>>({});
 
   // Load teams for team manager picker
   useEffect(() => {
@@ -46,6 +47,15 @@ export default function TournamentDetailPage() {
       }).catch(() => {});
     }
   }, [user, isTeamManager]);
+
+  // Load all teams for mapping payout summary
+  useEffect(() => {
+    api.getTeams().then(all => {
+      const map: Record<string,string> = {};
+      all.forEach(t => { map[t.id] = t.name; });
+      setTeamNames(map);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchTournament = async () => {
@@ -269,6 +279,41 @@ export default function TournamentDetailPage() {
               <BracketViewer tournamentId={id!} initial={bracket} isAdmin={user?.role === "admin"} />
             </CardContent>
           </Card>
+
+          {tournament.payout && (
+            <Card className="border-primary/20">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><Award className="w-5 h-5 text-primary" /> Payout Summary</CardTitle>
+                  <CardDescription>
+                    Distributed ${tournament.payout.total.toFixed(2)} on {new Date(tournament.payout.timestamp).toLocaleString()}
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-left py-2 pr-4">Place</th>
+                        <th className="text-left py-2 pr-4">Team</th>
+                        <th className="text-left py-2 pr-4">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournament.payout.awards.map((a: { place: number; teamId: string; amount: number }) => (
+                        <tr key={`${a.place}-${a.teamId}`} className="border-b last:border-0">
+                          <td className="py-1 pr-4 font-medium">{a.place}</td>
+                          <td className="py-1 pr-4">{teamNames[a.teamId] || a.teamId}</td>
+                          <td className="py-1 pr-4">${a.amount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -347,9 +392,9 @@ export default function TournamentDetailPage() {
                   className="w-full"
                   variant="secondary"
                   onClick={handleEnd}
-                  disabled={!canEndTournament || ending}
+                  disabled={!canEndTournament || ending || !!tournament.payout}
                 >
-                  {ending ? "Ending..." : "End Tournament & Payout"}
+                  {ending ? "Ending..." : tournament.payout ? "Payout Distributed" : "End Tournament & Payout"}
                 </Button>
               </CardContent>
             </Card>

@@ -980,24 +980,23 @@ export function endTournamentAndPayout(tournamentId: string) {
   }
 
   const total = parsePrizePool(t.prizePool);
-  if (!total || total <= 0) throw new Error("No prize pool set for this tournament");
-
-  let awards: Array<{ teamId: string; amount: number }> = [];
+  // Allow tournaments with zero prize (still mark completion & placements)
+  let awards: Array<{ place: number; teamId: string; amount: number }> = [];
   if (b.kind === "double") {
     const { first, second, third } = computePlacementsDouble(b);
     if (!first || !second) throw new Error("Final not completed yet");
-    awards.push({ teamId: first, amount: +(total * 0.6).toFixed(2) });
-    awards.push({ teamId: second, amount: +(total * 0.25).toFixed(2) });
-    if (third) awards.push({ teamId: third, amount: +(total * 0.15).toFixed(2) });
+    awards.push({ place: 1, teamId: first, amount: +(total * 0.6).toFixed(2) });
+    awards.push({ place: 2, teamId: second, amount: +(total * 0.25).toFixed(2) });
+    if (third) awards.push({ place: 3, teamId: third, amount: +(total * 0.15).toFixed(2) });
   } else {
     const { first, second, thirds } = computePlacementsSingle(b);
     if (!first || !second) throw new Error("Final not completed yet");
-    awards.push({ teamId: first, amount: +(total * 0.6).toFixed(2) });
-    awards.push({ teamId: second, amount: +(total * 0.25).toFixed(2) });
+    awards.push({ place: 1, teamId: first, amount: +(total * 0.6).toFixed(2) });
+    awards.push({ place: 2, teamId: second, amount: +(total * 0.25).toFixed(2) });
     if (thirds.length) {
       const thirdShareTotal = total * 0.15;
-      const perTeam = +(thirdShareTotal / thirds.length).toFixed(2);
-      thirds.forEach((tid) => awards.push({ teamId: tid, amount: perTeam }));
+      const perTeam = thirds.length ? +(thirdShareTotal / thirds.length).toFixed(2) : 0;
+      thirds.forEach((tid) => awards.push({ place: 3, teamId: tid, amount: perTeam }));
     }
   }
 
@@ -1005,8 +1004,21 @@ export function endTournamentAndPayout(tournamentId: string) {
   for (const award of awards) {
     const team = teams.find((tm) => tm.id === award.teamId);
     if (team) {
-      team.balance = +(Number(team.balance || 0) + award.amount).toFixed(2);
-      log(award.teamId, "payout", `Awarded ${award.amount} from ${t.title}`);
+      // Only modify balance if amount > 0
+      if (award.amount > 0) {
+        team.balance = +(Number(team.balance || 0) + award.amount).toFixed(2);
+      }
+      log(award.teamId, "payout", `Awarded ${award.amount} from ${t.title} (place ${award.place})`);
+      // Notify all team members (only if there is a positive prize)
+      if (award.amount > 0) {
+        team.members.forEach((member) => {
+          notify(member.id, {
+            type: "success",
+            message: `Your team earned $${award.amount.toFixed(2)} for place ${award.place} in ${t.title}`,
+            teamId: team.id,
+          });
+        });
+      }
     }
   }
   const payout = {
