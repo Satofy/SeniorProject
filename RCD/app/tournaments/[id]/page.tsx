@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useParams, useRouter } from "next/navigation"
 import { Trophy, Calendar, Users, ArrowLeft, DollarSign, Gamepad2, Award } from "lucide-react"
+import { formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -295,7 +296,7 @@ export default function TournamentDetailPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2"><Award className="w-5 h-5 text-primary" /> Payout Summary</CardTitle>
                   <CardDescription>
-                    Distributed ${tournament.payout.total.toFixed(2)} on {new Date(tournament.payout.timestamp).toLocaleString()}
+                    Distributed {formatCurrency(tournament.payout.total)} on {new Date(tournament.payout.timestamp).toLocaleString()}
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -314,7 +315,7 @@ export default function TournamentDetailPage() {
                         <tr key={`${a.place}-${a.teamId}`} className="border-b last:border-0">
                           <td className="py-1 pr-4 font-medium">{a.place}</td>
                           <td className="py-1 pr-4">{teamNames[a.teamId] || a.teamId}</td>
-                          <td className="py-1 pr-4">${a.amount.toFixed(2)}</td>
+                          <td className="py-1 pr-4">{formatCurrency(a.amount)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -335,20 +336,23 @@ export default function TournamentDetailPage() {
               {user ? (
                 <>
                   {tournament.status === "upcoming" ? (
-                    <Button
-                      onClick={() => setShowRegisterDialog(true)}
-                      className="w-full"
-                      size="lg"
-                    >
-                      <Trophy className="w-4 h-4 mr-2" />
-                      Register Now
-                    </Button>
+                    (isTeamManager || isCaptain) ? (
+                      <Button
+                        onClick={() => setShowRegisterDialog(true)}
+                        className="w-full"
+                        size="lg"
+                      >
+                        <Trophy className="w-4 h-4 mr-2" />
+                        Register Team
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center">
+                        Only team managers or captains can register a team.
+                      </p>
+                    )
                   ) : (
                     <p className="text-sm text-muted-foreground text-center">
-                      Registration is{" "}
-                      {tournament.status === "ongoing"
-                        ? "closed"
-                        : "not available"}
+                      Registration is {tournament.status === "ongoing" ? "closed" : "not available"}
                     </p>
                   )}
                 </>
@@ -446,12 +450,13 @@ export default function TournamentDetailPage() {
             <DialogDescription>
               {isTeamManager
                 ? "Select which team you want to register for this tournament"
-                : "Confirm your registration for this tournament"}
+                : "Confirm your team registration for this tournament"}
             </DialogDescription>
           </DialogHeader>
-          {isTeamManager && (
+          {(isTeamManager || isCaptain) && (
             <div className="py-4">
-              <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+              {isTeamManager ? (
+                <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select your team" />
                 </SelectTrigger>
@@ -463,10 +468,17 @@ export default function TournamentDetailPage() {
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-2">
-                Note: Team selection will be populated from your actual teams
-              </p>
+                </Select>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  You will register your team automatically.
+                </div>
+              )}
+              {isTeamManager && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Note: Team selection will be populated from your actual teams
+                </p>
+              )}
             </div>
           )}
           <DialogFooter>

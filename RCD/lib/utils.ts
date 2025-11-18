@@ -20,3 +20,12 @@ export function formatRelativeTime(dateInput: string | number | Date): string {
   if (min > 0) return `${min}m ${suffix}`
   return `${sec}s ${suffix}`
 }
+
+export function formatCurrency(value: number, currency: string = 'USD', locale: string = 'en-US') {
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value)
+  } catch {
+    // Fallback
+    return `$${(Number(value) || 0).toFixed(2)}`
+  }
+}

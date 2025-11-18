@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import { Trophy, Users, Calendar, TrendingUp, CheckCircle, XCircle, UserMinus } from "lucide-react"
+import { formatCurrency } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { toast } from "sonner"
 
@@ -291,7 +292,7 @@ function DashboardContent() {
                         <div key={mt.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                           <div>
                             <p className="font-medium">{mt.name}</p>
-                            <p className="text-xs text-muted-foreground">Members: {mt.members?.length || 0} • Balance: ${mt.balance || 0}</p>
+                            <p className="text-xs text-muted-foreground">Members: {mt.members?.length || 0} • Balance: {formatCurrency(mt.balance || 0)}</p>
                           </div>
                           <Button asChild variant="outline" size="sm" className="bg-transparent">
                             <Link href={`/teams/${mt.id}`}>View Team</Link>
@@ -386,7 +387,7 @@ function DashboardContent() {
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="p-4 bg-muted/50 rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Team Balance</p>
-                        <p className="text-2xl font-bold">${team.balance || 0}</p>
+                        <p className="text-2xl font-bold">{formatCurrency(team.balance || 0)}</p>
                       </div>
                       <div className="p-4 bg-muted/50 rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Total Games</p>

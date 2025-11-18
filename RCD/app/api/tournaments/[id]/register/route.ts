@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { createRegistration, getTournament } from "../../../_mockData"
+import { createRegistration, getTournament, getTeam } from "../../../_mockData"
 
 export async function POST(
   req: NextRequest,
@@ -15,9 +15,20 @@ export async function POST(
     return NextResponse.json({ message: "Registration closed" }, { status: 400 })
   }
 
-  // In a real app we would resolve user from auth token and validate role/team ownership
+  // Validate request ownership: require teamId and manager/captain authorization
+  const teamId = body?.teamId
+  if (!teamId) return NextResponse.json({ message: "teamId is required" }, { status: 400 })
+  const team = getTeam(teamId)
+  if (!team) return NextResponse.json({ message: "Team not found" }, { status: 404 })
+  const auth = req.headers.get("authorization") || ""
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null
+  const isManager = token === team.managerId
+  const isCaptain = !!(team.captainIds && token && team.captainIds.includes(token))
+  if (!isManager && !isCaptain) {
+    return NextResponse.json({ message: "forbidden" }, { status: 403 })
+  }
+
   try {
-    const teamId = body?.teamId || "t1" // fallback for mock
     const reg = createRegistration(id, teamId)
     return NextResponse.json(reg, { status: 201 })
   } catch (e: any) {

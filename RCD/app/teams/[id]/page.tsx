@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { formatCurrency } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
 import { useParams, useRouter } from "next/navigation"
 import {
@@ -231,7 +232,7 @@ export default function TeamDetailPage() {
                     <p className="text-sm text-muted-foreground">
                       Team Balance
                     </p>
-                    <p className="text-2xl font-bold">${team.balance}</p>
+                    <p className="text-2xl font-bold">{formatCurrency(team.balance || 0)}</p>
                   </div>
                 )}
               </div>
