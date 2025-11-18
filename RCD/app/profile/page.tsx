@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { api } from "@/lib/api"
@@ -15,12 +15,15 @@ import { Separator } from "@/components/ui/separator"
 import { User, Mail, Shield, Users, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 function ProfileContent() {
   const { user, refreshUser } = useAuth()
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState(user?.username || "")
   const [email, setEmail] = useState(user?.email || "")
+  const [avatarPreview, setAvatarPreview] = useState<string | undefined>(user?.avatarUrl)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -36,6 +39,7 @@ function ProfileContent() {
       await api.updateUser(user.id, {
         username: username || undefined,
         email: email || undefined,
+        avatarUrl: avatarPreview,
       })
       toast.success("Profile updated successfully")
       await refreshUser()
@@ -46,6 +50,28 @@ function ProfileContent() {
       setLoading(false)
     }
   }
+
+  const onPickAvatar = () => fileInputRef.current?.click()
+  const onAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file")
+      return
+    }
+    const maxBytes = 2 * 1024 * 1024 // 2MB
+    if (file.size > maxBytes) {
+      toast.error("Image must be under 2MB")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      setAvatarPreview(result)
+    }
+    reader.readAsDataURL(file)
+  }
+  const onRemoveAvatar = () => setAvatarPreview("/placeholder-user.jpg")
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,9 +117,17 @@ function ProfileContent() {
         <Card className="border-primary/20">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Profile Information</CardTitle>
-                <CardDescription>Your personal details and account information</CardDescription>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-14 w-14">
+                  <AvatarImage src={avatarPreview || user?.avatarUrl || "/placeholder-user.jpg"} alt={user?.username || user?.email || "avatar"} />
+                  <AvatarFallback>
+                    {(user?.username || user?.email || "U").slice(0,2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle>Profile Information</CardTitle>
+                  <CardDescription>Your personal details and account information</CardDescription>
+                </div>
               </div>
               {!editing && (
                 <Button onClick={() => setEditing(true)} variant="outline">
@@ -105,6 +139,28 @@ function ProfileContent() {
           <CardContent>
             {editing ? (
               <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Avatar</Label>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={avatarPreview || "/placeholder-user.jpg"} alt="avatar preview" />
+                      <AvatarFallback>
+                        {(username || email || "U").slice(0,2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" onClick={onPickAvatar} disabled={loading}>Change Photo</Button>
+                      <Button type="button" variant="ghost" onClick={onRemoveAvatar} disabled={loading}>Remove</Button>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={onAvatarFileChange}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
                   <Input
@@ -144,6 +200,7 @@ function ProfileContent() {
                       setEditing(false)
                       setUsername(user?.username || "")
                       setEmail(user?.email || "")
+                      setAvatarPreview(user?.avatarUrl)
                     }}
                     disabled={loading}
                   >

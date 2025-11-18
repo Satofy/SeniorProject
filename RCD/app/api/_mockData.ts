@@ -7,6 +7,7 @@ export type MockUser = {
   username?: string;
   // Single-team affiliation for simplified model
   teamId?: string;
+  avatarUrl?: string;
 };
 
 export type MockTeam = {
@@ -112,20 +113,29 @@ if (!users.length) {
       email: "owner@example.com",
       role: "team_manager",
       username: "owner",
+      avatarUrl: "/placeholder-user.jpg",
     },
     {
       id: "2",
       email: "player1@example.com",
       role: "player",
       username: "player1",
+      avatarUrl: "/placeholder-user.jpg",
     },
     {
       id: "3",
       email: "player2@example.com",
       role: "player",
       username: "player2",
+      avatarUrl: "/placeholder-user.jpg",
     },
-    { id: "4", email: "admin@example.com", role: "admin", username: "admin" }
+    {
+      id: "4",
+      email: "admin@example.com",
+      role: "admin",
+      username: "admin",
+      avatarUrl: "/placeholder-user.jpg",
+    }
   );
 }
 
@@ -446,9 +456,40 @@ export function addUser(
   role: MockUser["role"] = "player"
 ) {
   // Note: password is ignored in mock
-  const u: MockUser = { id: newid(), email, role, username };
+  const u: MockUser = {
+    id: newid(),
+    email,
+    role,
+    username,
+    avatarUrl: "/placeholder-user.jpg",
+  };
   users.push(u);
   log(u.id, "register", `User ${email} registered`);
+  return u;
+}
+
+export function updateUserProfile(
+  userId: string,
+  data: Partial<Pick<MockUser, "username" | "email" | "avatarUrl">>
+) {
+  const u = users.find((x) => x.id === userId);
+  if (!u) return null;
+  const allowed: Partial<MockUser> = {};
+  if (typeof data.username !== "undefined") allowed.username = data.username;
+  if (typeof data.email !== "undefined") allowed.email = data.email;
+  if (typeof data.avatarUrl !== "undefined") allowed.avatarUrl = data.avatarUrl;
+  Object.assign(u, allowed);
+  // Keep team member entries in sync with latest user fields
+  teams.forEach((t) => {
+    t.members = t.members.map((m) =>
+      m.id === userId ? { ...m, ...allowed } : m
+    );
+  });
+  log(
+    userId,
+    "update_user",
+    `Updated profile fields: ${Object.keys(allowed).join(",")}`
+  );
   return u;
 }
 

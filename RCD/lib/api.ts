@@ -5,11 +5,12 @@ const DATA_MODE = (
 ).toLowerCase() as "mock" | "real";
 
 export interface User {
-  id: string
-  email: string
-  username?: string
-  role: "guest" | "player" | "team_manager" | "admin"
-  teamId?: string
+  id: string;
+  email: string;
+  username?: string;
+  role: "guest" | "player" | "team_manager" | "admin";
+  teamId?: string;
+  avatarUrl?: string;
 }
 
 export interface Tournament {

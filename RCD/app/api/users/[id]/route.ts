@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { users, setUserRole, deleteUser } from "../../_mockData";
+import {
+  users,
+  setUserRole,
+  deleteUser,
+  updateUserProfile,
+} from "../../_mockData";
 
 export async function GET(
   _req: NextRequest,
@@ -23,9 +28,24 @@ export async function PATCH(
     const ok = setUserRole(id, body.role);
     if (!ok)
       return NextResponse.json({ message: "Not found" }, { status: 404 });
-    return NextResponse.json({ success: true });
+    const user = users.find((u) => u.id === id);
+    return NextResponse.json(user);
   }
-  return NextResponse.json({ message: "No fields to update" }, { status: 400 });
+  const { username, email, avatarUrl } = body || {};
+  if (
+    typeof username === "undefined" &&
+    typeof email === "undefined" &&
+    typeof avatarUrl === "undefined"
+  ) {
+    return NextResponse.json(
+      { message: "No fields to update" },
+      { status: 400 }
+    );
+  }
+  const updated = updateUserProfile(id, { username, email, avatarUrl });
+  if (!updated)
+    return NextResponse.json({ message: "Not found" }, { status: 404 });
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(

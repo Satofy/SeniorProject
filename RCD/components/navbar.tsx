@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/notifications-context";
 import { api, type JoinRequest } from "@/lib/api";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type NavLink = {
   href: string;
@@ -181,12 +182,14 @@ export function Navbar() {
                     aria-haspopup="true"
                   >
                     <Bell className="h-4 w-4" />
-                    {(unreadCount + managerUnread) > 0 ? (
+                    {unreadCount + managerUnread > 0 ? (
                       <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
                         {unreadCount + managerUnread}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">No alerts</span>
+                      <span className="text-xs text-muted-foreground">
+                        No alerts
+                      </span>
                     )}
                     <ChevronDown className="h-4 w-4 opacity-70" />
                   </Button>
@@ -215,20 +218,55 @@ export function Navbar() {
                       </div>
                       <div className="max-h-80 overflow-y-auto">
                         {/* Manager join requests */}
-                        {user?.role === 'team_manager' && (
+                        {user?.role === "team_manager" && (
                           <div className="px-4 py-3 border-b border-border">
-                            <p className="text-xs font-semibold mb-2">Join Requests</p>
+                            <p className="text-xs font-semibold mb-2">
+                              Join Requests
+                            </p>
                             {managerRequests.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">None</p>
+                              <p className="text-xs text-muted-foreground">
+                                None
+                              </p>
                             ) : (
-                              managerRequests.map(r => (
+                              managerRequests.map((r) => (
                                 <div key={r.id} className="mb-2 last:mb-0">
-                                  <p className="text-xs font-medium truncate">{r.user?.email || r.userId} → {r.team?.name || r.teamId}</p>
+                                  <p className="text-xs font-medium truncate">
+                                    {r.user?.email || r.userId} →{" "}
+                                    {r.team?.name || r.teamId}
+                                  </p>
                                   <div className="flex gap-2 mt-1">
-                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={async () => { await api.approveJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); setManagerUnread(u => u - 1); }}>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 px-2 text-xs"
+                                      onClick={async () => {
+                                        await api.approveJoinRequest(
+                                          r.teamId,
+                                          r.id
+                                        );
+                                        setManagerRequests((prev) =>
+                                          prev.filter((x) => x.id !== r.id)
+                                        );
+                                        setManagerUnread((u) => u - 1);
+                                      }}
+                                    >
                                       Approve
                                     </Button>
-                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={async () => { await api.declineJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); setManagerUnread(u => u - 1); }}>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 px-2 text-xs"
+                                      onClick={async () => {
+                                        await api.declineJoinRequest(
+                                          r.teamId,
+                                          r.id
+                                        );
+                                        setManagerRequests((prev) =>
+                                          prev.filter((x) => x.id !== r.id)
+                                        );
+                                        setManagerUnread((u) => u - 1);
+                                      }}
+                                    >
                                       Decline
                                     </Button>
                                   </div>
@@ -255,7 +293,9 @@ export function Navbar() {
                                   </p>
                                   {notification.createdAt && (
                                     <p className="text-xs text-muted-foreground">
-                                      {new Date(notification.createdAt).toLocaleString()}
+                                      {new Date(
+                                        notification.createdAt
+                                      ).toLocaleString()}
                                     </p>
                                   )}
                                 </div>
@@ -268,19 +308,20 @@ export function Navbar() {
                                   ×
                                 </button>
                               </div>
-                              {notification.actionLabel && notification.onAction && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-3 text-xs"
-                                  onClick={() => {
-                                    notification.onAction?.();
-                                    setNotificationsOpen(false);
-                                  }}
-                                >
-                                  {notification.actionLabel}
-                                </Button>
-                              )}
+                              {notification.actionLabel &&
+                                notification.onAction && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 px-3 text-xs"
+                                    onClick={() => {
+                                      notification.onAction?.();
+                                      setNotificationsOpen(false);
+                                    }}
+                                  >
+                                    {notification.actionLabel}
+                                  </Button>
+                                )}
                             </div>
                           ))
                         )}
@@ -298,6 +339,15 @@ export function Navbar() {
                     aria-haspopup="true"
                     aria-expanded={profileOpen}
                   >
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage
+                        src={user?.avatarUrl || "/placeholder-user.jpg"}
+                        alt={displayName}
+                      />
+                      <AvatarFallback>
+                        {(displayName || "U").slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="max-w-[160px] truncate font-medium">
                       {displayName}
                     </span>
