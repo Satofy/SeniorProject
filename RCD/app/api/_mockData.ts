@@ -385,14 +385,27 @@ export function declineTeamJoinRequest(teamId: string, requestId: string) {
   return req
 }
 
-export function removeMember(teamId: string, userId: string) {
+export function removeMember(teamId: string, userId: string, actorId?: string, reason?: string) {
   const team = getTeam(teamId)
   if (!team) return false
+  const before = team.members.length
   team.members = team.members.filter((m) => m.id !== userId)
-  // also ensure captainIds pruned
   if (team.captainIds && team.captainIds.length) {
     team.captainIds = team.captainIds.filter((id) => id !== userId)
   }
+  if (team.members.length === before) return false
+  const removedUser = users.find((u) => u.id === userId)
+  if (removedUser) {
+    notify(removedUser.id, {
+      type: "warning",
+      message:
+        reason?.trim().length
+          ? reason
+          : `You were removed from team ${team.name}`,
+      teamId,
+    })
+  }
+  log(actorId || team.managerId, "remove_member", `Removed user ${userId} from team ${teamId}`)
   return true
 }
 

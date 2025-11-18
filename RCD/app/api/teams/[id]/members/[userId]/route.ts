@@ -15,7 +15,8 @@ export async function DELETE(
   if (!token || token !== team.managerId) {
     return NextResponse.json({ message: "forbidden" }, { status: 403 });
   }
-  const ok = removeMember(id, userId);
+  const body = await req.json().catch(() => ({})) as { reason?: string };
+  const ok = removeMember(id, userId, token || undefined, body?.reason);
   if (!ok) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json({ success: true });
 }

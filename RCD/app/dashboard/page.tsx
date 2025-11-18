@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import { Trophy, Users, Calendar, TrendingUp, CheckCircle, XCircle, UserMinus } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { toast } from "sonner"
 
 function DashboardContent() {
@@ -27,6 +28,38 @@ function DashboardContent() {
   const [creatingTeam, setCreatingTeam] = useState(false)
   const isCaptain = !!(team && user && team.captainIds && team.captainIds.includes(user.id))
 
+  // Removal dialog state
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const [removeTargetId, setRemoveTargetId] = useState<string | null>(null)
+  const [removeReason, setRemoveReason] = useState("")
+  const [removingMember, setRemovingMember] = useState(false)
+
+  const openRemoveDialog = (memberId: string) => {
+    setRemoveTargetId(memberId)
+    setRemoveReason("")
+    setShowRemoveDialog(true)
+  }
+  const closeRemoveDialog = () => {
+    if (removingMember) return
+    setShowRemoveDialog(false)
+    setRemoveTargetId(null)
+    setRemoveReason("")
+  }
+  const confirmRemoveMember = async () => {
+    if (!team || !removeTargetId) return
+    setRemovingMember(true)
+    try {
+      await api.removeTeamMember(team.id, removeTargetId, removeReason.trim() || undefined)
+      const updated = await api.getTeam(team.id)
+      setTeam(updated)
+      toast.success("Member removed")
+      closeRemoveDialog()
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to remove member")
+    } finally {
+      setRemovingMember(false)
+    }
+  }
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -445,16 +478,7 @@ function DashboardContent() {
                                   size="sm"
                                   variant="outline"
                                   className="bg-transparent"
-                                  onClick={async () => {
-                                    try {
-                                      await api.removeTeamMember(team.id, member.id);
-                                      const updated = await api.getTeam(team.id);
-                                      setTeam(updated);
-                                      toast.success("Member removed");
-                                    } catch (e: any) {
-                                      toast.error(e?.message || "Failed to remove member");
-                                    }
-                                  }}
+                                  onClick={() => openRemoveDialog(member.id)}
                                 >
                                   <UserMinus className="w-4 h-4 mr-1" />
                                   Remove
@@ -491,6 +515,32 @@ function DashboardContent() {
                     )}
                   </CardContent>
                 </Card>
+                {/* Removal dialog component */}
+                <Dialog open={showRemoveDialog} onOpenChange={(o) => { if (!o) closeRemoveDialog() }}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Remove Team Member</DialogTitle>
+                      <DialogDescription>
+                        Optionally provide a message. The member will receive a notification.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <Label htmlFor="remove-reason" className="text-sm">Message (optional)</Label>
+                      <Input
+                        id="remove-reason"
+                        value={removeReason}
+                        placeholder="e.g. Adjusting roster for next tournament"
+                        onChange={(e) => setRemoveReason(e.target.value)}
+                      />
+                    </div>
+                    <DialogFooter className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={closeRemoveDialog} disabled={removingMember}>Cancel</Button>
+                      <Button variant="destructive" onClick={confirmRemoveMember} disabled={removingMember}>
+                        {removingMember ? "Removing..." : "Remove Member"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </>
             ) : (
               <Card>

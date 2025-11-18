@@ -420,9 +420,10 @@ class ApiClient {
     });
   }
 
-  async removeTeamMember(teamId: string, userId: string) {
+  async removeTeamMember(teamId: string, userId: string, reason?: string) {
     return this.request(`/api/teams/${teamId}/members/${userId}`, {
       method: "DELETE",
+      body: JSON.stringify(reason ? { reason } : {}),
     });
   }
 

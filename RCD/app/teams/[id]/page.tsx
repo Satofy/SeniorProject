@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -36,6 +37,11 @@ export default function TeamDetailPage() {
   const [editName, setEditName] = useState("");
   const [editTag, setEditTag] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  // Removal dialog state
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const [removeTargetId, setRemoveTargetId] = useState<string | null>(null)
+  const [removeReason, setRemoveReason] = useState("")
+  const [removingMember, setRemovingMember] = useState(false)
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -258,6 +264,20 @@ export default function TeamDetailPage() {
                             </Badge>
                           )}
                           {isManager && member.id !== team.managerId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-transparent"
+                              onClick={() => {
+                                setRemoveTargetId(member.id)
+                                setRemoveReason("")
+                                setShowRemoveDialog(true)
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                          {isManager && member.id !== team.managerId && (
                             <Button size="sm" variant="outline" className="bg-transparent" onClick={() => toggleCaptain(member.id)}>
                               {team.captainIds?.includes(member.id) ? "Remove Captain" : "Make Captain"}
                             </Button>
@@ -278,6 +298,51 @@ export default function TeamDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          <Dialog open={showRemoveDialog} onOpenChange={(o) => { if (!o && !removingMember) { setShowRemoveDialog(false); setRemoveTargetId(null); setRemoveReason(""); } }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Remove Team Member</DialogTitle>
+                <DialogDescription>
+                  Optionally provide a message. The member will receive a notification.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <Label htmlFor="remove-reason-team" className="text-sm">Message (optional)</Label>
+                <Input
+                  id="remove-reason-team"
+                  value={removeReason}
+                  placeholder="e.g. Roster change for next split"
+                  onChange={(e) => setRemoveReason(e.target.value)}
+                />
+              </div>
+              <DialogFooter className="flex justify-end gap-2">
+                <Button variant="outline" disabled={removingMember} onClick={() => { if (!removingMember) { setShowRemoveDialog(false); setRemoveTargetId(null); setRemoveReason(""); } }}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  disabled={removingMember || !removeTargetId}
+                  onClick={async () => {
+                    if (!removeTargetId || !team) return;
+                    setRemovingMember(true)
+                    try {
+                      await api.removeTeamMember(team.id, removeTargetId, removeReason.trim() || undefined)
+                      const updated = await api.getTeam(team.id)
+                      setTeam(updated)
+                      toast.success("Member removed")
+                      setShowRemoveDialog(false)
+                      setRemoveTargetId(null)
+                      setRemoveReason("")
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to remove member")
+                    } finally {
+                      setRemovingMember(false)
+                    }
+                  }}
+                >
+                  {removingMember ? "Removing..." : "Remove Member"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           {(isManager || isCaptain) && (
             <Card className="border-primary/20">
               <CardHeader>
