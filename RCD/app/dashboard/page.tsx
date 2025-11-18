@@ -16,7 +16,9 @@ function DashboardContent() {
   const { user, isPlayer, isTeamManager, isAdmin } = useAuth()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [team, setTeam] = useState<Team | null>(null)
+  const [managedTeams, setManagedTeams] = useState<Team[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const [managerRequests, setManagerRequests] = useState<Array<JoinRequest & { team?: any; user?: any }>>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -32,6 +34,23 @@ function DashboardContent() {
           } catch {}
         } else {
           setTeam(null)
+        }
+
+        // Load teams managed by this user (even if different from their player team)
+        if (user && isTeamManager) {
+          try {
+            const all = await api.getTeams();
+            setManagedTeams(all.filter(t => t.managerId === user.id));
+            // Load aggregated manager join requests
+            const reqs = await api.getManagerJoinRequests();
+            setManagerRequests(reqs);
+          } catch {
+            setManagedTeams([]);
+            setManagerRequests([]);
+          }
+        } else {
+          setManagedTeams([]);
+          setManagerRequests([]);
         }
       } catch (error) {
         console.error("[v0] Failed to fetch dashboard data:", error)
@@ -191,6 +210,66 @@ function DashboardContent() {
 
         {isTeamManager && (
           <TabsContent value="team" className="space-y-4">
+            {/* Managed Teams List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Managed Teams</CardTitle>
+                <CardDescription>Teams where you are the manager</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {managedTeams.length > 0 ? (
+                  <div className="space-y-3">
+                    {managedTeams.map((mt) => (
+                      <div key={mt.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                        <div>
+                          <p className="font-medium">{mt.name}</p>
+                          <p className="text-xs text-muted-foreground">Members: {mt.members?.length || 0} • Balance: ${mt.balance || 0}</p>
+                        </div>
+                        <Button asChild variant="outline" size="sm" className="bg-transparent">
+                          <Link href={`/teams/${mt.id}`}>View Team</Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-muted-foreground">You don’t manage any teams yet.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Aggregated Join Requests (all managed teams) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Manager Join Requests</CardTitle>
+                <CardDescription>Approve or decline incoming requests for all your teams</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {managerRequests.length > 0 ? (
+                  <div className="space-y-3">
+                    {managerRequests.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                        <div>
+                          <p className="font-medium">{r.user?.email || r.userId}</p>
+                          <p className="text-xs text-muted-foreground">Team: {r.team?.name || r.teamId}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.approveJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.declineJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
+                            Decline
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-sm text-muted-foreground">No pending requests.</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Player's own team controls (if they are also in a team) */}
             {team ? (
               <>
                 <Card>
@@ -288,7 +367,22 @@ function DashboardContent() {
                               <p className="text-sm text-muted-foreground capitalize">{member.role}</p>
                             </div>
                             {member.id !== team.managerId && (
-                              <Button size="sm" variant="outline" className="bg-transparent">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="bg-transparent"
+                                onClick={async () => {
+                                  try {
+                                    await api.removeTeamMember(team.id, member.id);
+                                    // Refresh local team state
+                                    const updated = await api.getTeam(team.id);
+                                    setTeam(updated);
+                                    toast.success("Member removed");
+                                  } catch (e: any) {
+                                    toast.error(e?.message || "Failed to remove member");
+                                  }
+                                }}
+                              >
                                 <UserMinus className="w-4 h-4 mr-1" />
                                 Remove
                               </Button>
