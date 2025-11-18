@@ -15,6 +15,7 @@ export type MockTeam = {
   tag?: string
   managerId: string
   members: MockUser[]
+  captainIds?: string[]
   gamesPlayed?: number
   balance?: number
   createdAt?: string
@@ -137,6 +138,7 @@ if (!teams.length) {
       tag: "RCD",
       managerId: "1",
       members: [users[0], users[1], users[2]],
+      captainIds: [],
       gamesPlayed: 42,
       balance: 1500,
       createdAt: new Date().toISOString(),
@@ -147,6 +149,7 @@ if (!teams.length) {
       tag: "SHDW",
       managerId: "4",
       members: [users[3], users[2]],
+      captainIds: [],
       gamesPlayed: 12,
       createdAt: new Date().toISOString(),
     }
@@ -273,6 +276,7 @@ export function addTeam(name: string, tag?: string, managerId: string = users[0]
     tag,
     managerId,
     members: [users.find((u) => u.id === managerId)!],
+    captainIds: [],
     createdAt: new Date().toISOString(),
   };
   teams.push(t);
@@ -385,6 +389,10 @@ export function removeMember(teamId: string, userId: string) {
   const team = getTeam(teamId)
   if (!team) return false
   team.members = team.members.filter((m) => m.id !== userId)
+  // also ensure captainIds pruned
+  if (team.captainIds && team.captainIds.length) {
+    team.captainIds = team.captainIds.filter((id) => id !== userId)
+  }
   return true
 }
 
@@ -916,6 +924,21 @@ export function resetState() {
   for (const k of Object.keys(brackets)) delete brackets[k]
   for (const k of Object.keys(bracketSubscribers)) delete bracketSubscribers[k]
   auditLogs.splice(0, auditLogs.length)
+}
+
+// ---------- Team Captain Management ----------
+export function setCaptain(teamId: string, userId: string, enabled: boolean) {
+  const team = getTeam(teamId);
+  if (!team) throw new Error("Team not found");
+  if (!team.members.some((m) => m.id === userId)) {
+    throw new Error("User is not a team member");
+  }
+  if (!team.captainIds) team.captainIds = [];
+  const has = team.captainIds.includes(userId);
+  if (enabled && !has) team.captainIds.push(userId);
+  if (!enabled && has) team.captainIds = team.captainIds.filter((id) => id !== userId);
+  log(team.managerId, enabled ? "add_captain" : "remove_captain", `${userId} ${enabled ? "granted" : "revoked"} captain on ${teamId}`);
+  return team;
 }
 
 // ---------- Payout Logic ----------

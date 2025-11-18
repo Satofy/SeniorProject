@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { api, type Team } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -30,6 +32,10 @@ export default function TeamDetailPage() {
   const [myPending, setMyPending] = useState<any | null>(null);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [refreshToggle, setRefreshToggle] = useState(0);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editTag, setEditTag] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -107,6 +113,7 @@ export default function TeamDetailPage() {
   }
 
   const isManager = user?.id === team.managerId
+  const isCaptain = !!(team && user && team.captainIds && team.captainIds.includes(user.id))
   const refreshRequests = () => setRefreshToggle(t => t + 1)
 
   const approve = async (reqId: string) => {
@@ -134,6 +141,40 @@ export default function TeamDetailPage() {
     }
   }
 
+  const openProfileEditor = () => {
+    if (!team) return;
+    setEditName(team.name || "");
+    setEditTag(team.tag || "");
+    setProfileOpen(true);
+  };
+
+  const saveProfile = async () => {
+    if (!id) return;
+    setSavingProfile(true);
+    try {
+      const updated = await api.updateTeam(id, { name: editName.trim() || undefined, tag: editTag });
+      setTeam(updated);
+      setProfileOpen(false);
+      toast.success("Team profile updated");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const toggleCaptain = async (memberId: string) => {
+    if (!team) return;
+    try {
+      const enable = !(team.captainIds?.includes(memberId));
+      const updated = await api.setTeamCaptain(team.id, memberId, enable);
+      setTeam(updated);
+      toast.success(enable ? "Captain assigned" : "Captain removed");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update captain");
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Button variant="ghost" onClick={() => router.back()} className="mb-6">
@@ -156,10 +197,10 @@ export default function TeamDetailPage() {
                       </Badge>
                     )}
                   </CardTitle>
-                  {isManager && (
+                  {(isManager || isCaptain) && (
                     <Badge variant="secondary" className="mt-2">
                       <Shield className="w-3 h-3 mr-1" />
-                      You manage this team
+                      {isManager ? "You manage this team" : "You are a captain"}
                     </Badge>
                   )}
                 </div>
@@ -204,14 +245,24 @@ export default function TeamDetailPage() {
                           <p className="font-medium">{member.email}</p>
                           <p className="text-sm text-muted-foreground capitalize">
                             {member.role}
+                            {team.captainIds?.includes(member.id) && (
+                              <span className="ml-2 inline-flex items-center rounded bg-primary/10 text-primary px-2 py-0.5 text-xs">Captain</span>
+                            )}
                           </p>
                         </div>
-                        {member.id === team.managerId && (
-                          <Badge variant="outline">
-                            <Shield className="w-3 h-3 mr-1" />
-                            Manager
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {member.id === team.managerId && (
+                            <Badge variant="outline">
+                              <Shield className="w-3 h-3 mr-1" />
+                              Manager
+                            </Badge>
+                          )}
+                          {isManager && member.id !== team.managerId && (
+                            <Button size="sm" variant="outline" className="bg-transparent" onClick={() => toggleCaptain(member.id)}>
+                              {team.captainIds?.includes(member.id) ? "Remove Captain" : "Make Captain"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -227,6 +278,21 @@ export default function TeamDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {(isManager || isCaptain) && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle>Team Management</CardTitle>
+                <CardDescription>Quick actions for your team</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button className="w-full" variant="default" onClick={openProfileEditor}>Manage Team Profile</Button>
+                <Button className="w-full" variant="outline" asChild>
+                  <a href="/tournaments">Schedule/Join Tournaments</a>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle>Join Team</CardTitle>
@@ -365,6 +431,31 @@ export default function TeamDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Profile Editor Dialog (inline at bottom to avoid layout issues) */}
+          {profileOpen && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="w-full max-w-md rounded-lg bg-background border shadow-lg">
+                <div className="p-4 border-b">
+                  <h3 className="text-lg font-semibold">Edit Team Profile</h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <Label htmlFor="team-name">Team Name</Label>
+                    <Input id="team-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="team-tag">Tag</Label>
+                    <Input id="team-tag" value={editTag} onChange={(e) => setEditTag(e.target.value)} placeholder="e.g. RCD" />
+                  </div>
+                </div>
+                <div className="p-4 flex justify-end gap-2 border-t">
+                  <Button variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
+                  <Button onClick={saveProfile} disabled={savingProfile}>{savingProfile ? "Saving..." : "Save"}</Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

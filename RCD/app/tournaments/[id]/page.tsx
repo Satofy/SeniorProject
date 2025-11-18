@@ -37,6 +37,7 @@ export default function TournamentDetailPage() {
   const [managerTeams, setManagerTeams] = useState<Array<{id:string; name:string}>>([]);
   const [ending, setEnding] = useState(false);
   const [teamNames, setTeamNames] = useState<Record<string, string>>({});
+  const [isCaptain, setIsCaptain] = useState(false);
 
   // Load teams for team manager picker
   useEffect(() => {
@@ -56,6 +57,14 @@ export default function TournamentDetailPage() {
       setTeamNames(map);
     }).catch(() => {});
   }, []);
+
+  // Determine if current user is a captain of their team
+  useEffect(() => {
+    if (!user?.teamId) { setIsCaptain(false); return; }
+    api.getTeam(user.teamId).then(t => {
+      setIsCaptain(!!(t.captainIds && user && t.captainIds.includes(user.id)));
+    }).catch(() => setIsCaptain(false));
+  }, [user]);
 
   useEffect(() => {
     const fetchTournament = async () => {
@@ -97,7 +106,7 @@ export default function TournamentDetailPage() {
   if (!id) return;
   await api.registerForTournament(
     id,
-    isTeamManager ? selectedTeamId : undefined
+    isTeamManager ? selectedTeamId : (isCaptain && user.teamId ? user.teamId : undefined)
   );
       toast.success("Successfully registered for tournament!")
       setShowRegisterDialog(false)
@@ -144,7 +153,7 @@ export default function TournamentDetailPage() {
     try {
       const payout = await api.endTournament(id);
       const summary = payout.awards
-        .map((a) => `${a.teamId}: $${a.amount.toFixed(2)}`)
+        .map((a) => `${teamNames[a.teamId] || a.teamId}: $${a.amount.toFixed(2)}`)
         .join("\n");
       toast.success(`Payout distributed ($${payout.total.toFixed(2)}):\n${summary}`);
       const data = await api.getTournament(id);

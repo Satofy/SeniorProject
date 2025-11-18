@@ -5,6 +5,8 @@ import { api, type Tournament, type Team, type JoinRequest } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,13 +15,17 @@ import { Trophy, Users, Calendar, TrendingUp, CheckCircle, XCircle, UserMinus } 
 import { toast } from "sonner"
 
 function DashboardContent() {
-  const { user, isPlayer, isTeamManager, isAdmin } = useAuth()
+  const { user, isPlayer, isTeamManager, isAdmin, refreshUser } = useAuth()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [team, setTeam] = useState<Team | null>(null)
   const [managedTeams, setManagedTeams] = useState<Team[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [managerRequests, setManagerRequests] = useState<Array<JoinRequest & { team?: any; user?: any }>>([])
   const [loading, setLoading] = useState(true)
+  const [newTeamName, setNewTeamName] = useState("")
+  const [newTeamTag, setNewTeamTag] = useState("")
+  const [creatingTeam, setCreatingTeam] = useState(false)
+  const isCaptain = !!(team && user && team.captainIds && team.captainIds.includes(user.id))
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,6 +67,27 @@ function DashboardContent() {
 
     fetchData()
   }, [user])
+
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return;
+    setCreatingTeam(true);
+    try {
+      const created = await api.createTeam(newTeamName.trim(), newTeamTag.trim() || undefined);
+      toast.success(`Team "${created.name}" created`);
+      setNewTeamName("");
+      setNewTeamTag("");
+      // Refresh auth and managed teams so dashboard reflects new manager team
+      await refreshUser();
+      try {
+        const all = await api.getTeams();
+        setManagedTeams(all.filter(t => t.managerId === (user?.id || created.managerId)));
+      } catch {}
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create team");
+    } finally {
+      setCreatingTeam(false);
+    }
+  }
 
   const handleApproveRequest = async (requestId: string) => {
     if (!team) return
@@ -109,7 +136,7 @@ function DashboardContent() {
           </CardContent>
         </Card>
 
-        {isTeamManager && team && (
+        {(isTeamManager || isCaptain) && team && (
           <>
             <Card className="border-primary/20">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -153,7 +180,14 @@ function DashboardContent() {
       <Tabs defaultValue="tournaments" className="space-y-6">
         <TabsList>
           <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
-          {isTeamManager && <TabsTrigger value="team">Team Management</TabsTrigger>}
+          {isTeamManager && (
+            <TabsTrigger value="team">
+              Team Management
+              {managerRequests.length > 0 && (
+                <Badge variant="secondary" className="ml-2">{managerRequests.length}</Badge>
+              )}
+            </TabsTrigger>
+          )}
           {isPlayer && <TabsTrigger value="activity">My Activity</TabsTrigger>}
         </TabsList>
 
@@ -208,66 +242,97 @@ function DashboardContent() {
           </Card>
         </TabsContent>
 
-        {isTeamManager && (
+          {(isTeamManager || isCaptain) && (
           <TabsContent value="team" className="space-y-4">
-            {/* Managed Teams List */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Managed Teams</CardTitle>
-                <CardDescription>Teams where you are the manager</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {managedTeams.length > 0 ? (
-                  <div className="space-y-3">
-                    {managedTeams.map((mt) => (
-                      <div key={mt.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                        <div>
-                          <p className="font-medium">{mt.name}</p>
-                          <p className="text-xs text-muted-foreground">Members: {mt.members?.length || 0} • Balance: ${mt.balance || 0}</p>
+            {/* Managed Teams List (manager only) */}
+            {isTeamManager && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Managed Teams</CardTitle>
+                  <CardDescription>Teams where you are the manager</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {managedTeams.length > 0 ? (
+                    <div className="space-y-3">
+                      {managedTeams.map((mt) => (
+                        <div key={mt.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                          <div>
+                            <p className="font-medium">{mt.name}</p>
+                            <p className="text-xs text-muted-foreground">Members: {mt.members?.length || 0} • Balance: ${mt.balance || 0}</p>
+                          </div>
+                          <Button asChild variant="outline" size="sm" className="bg-transparent">
+                            <Link href={`/teams/${mt.id}`}>View Team</Link>
+                          </Button>
                         </div>
-                        <Button asChild variant="outline" size="sm" className="bg-transparent">
-                          <Link href={`/teams/${mt.id}`}>View Team</Link>
-                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 space-y-4">
+                      <div className="text-center text-sm text-muted-foreground">You don’t manage any teams yet.</div>
+                      <div className="grid md:grid-cols-3 gap-3 items-end">
+                        <div>
+                          <Label htmlFor="new-team-name">Team Name</Label>
+                          <Input
+                            id="new-team-name"
+                            placeholder="e.g. Night Hawks"
+                            value={newTeamName}
+                            onChange={(e) => setNewTeamName(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="new-team-tag">Tag</Label>
+                          <Input
+                            id="new-team-tag"
+                            placeholder="e.g. NH"
+                            value={newTeamTag}
+                            onChange={(e) => setNewTeamTag(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button className="w-full" disabled={!newTeamName.trim() || creatingTeam} onClick={handleCreateTeam}>
+                            {creatingTeam ? "Creating..." : "Create Team"}
+                          </Button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-muted-foreground">You don’t manage any teams yet.</div>
-                )}
-              </CardContent>
-            </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Aggregated Join Requests (all managed teams) */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Manager Join Requests</CardTitle>
-                <CardDescription>Approve or decline incoming requests for all your teams</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {managerRequests.length > 0 ? (
-                  <div className="space-y-3">
-                    {managerRequests.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                        <div>
-                          <p className="font-medium">{r.user?.email || r.userId}</p>
-                          <p className="text-xs text-muted-foreground">Team: {r.team?.name || r.teamId}</p>
+            {/* Aggregated Join Requests (manager only) */}
+            {isTeamManager && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manager Join Requests</CardTitle>
+                  <CardDescription>Approve or decline incoming requests for all your teams</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {managerRequests.length > 0 ? (
+                    <div className="space-y-3">
+                      {managerRequests.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                          <div>
+                            <p className="font-medium">{r.user?.email || r.userId}</p>
+                            <p className="text-xs text-muted-foreground">Team: {r.team?.name || r.teamId}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.approveJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.declineJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
+                              Decline
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.approveJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
-                            Approve
-                          </Button>
-                          <Button size="sm" variant="outline" className="bg-transparent" onClick={async () => { await api.declineJoinRequest(r.teamId, r.id); setManagerRequests(prev => prev.filter(x => x.id !== r.id)); }}>
-                            Decline
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-muted-foreground">No pending requests.</div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-sm text-muted-foreground">No pending requests.</div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Player's own team controls (if they are also in a team) */}
             {team ? (
@@ -298,7 +363,9 @@ function DashboardContent() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                {/* Team Join Requests (manager only) */}
+                {isTeamManager && (
+                  <Card>
                   <CardHeader>
                     <CardTitle>Join Requests</CardTitle>
                     <CardDescription>Approve or decline players wanting to join your team</CardDescription>
@@ -347,7 +414,8 @@ function DashboardContent() {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                  </Card>
+                )}
 
                 <Card>
                   <CardHeader>
@@ -364,29 +432,54 @@ function DashboardContent() {
                           >
                             <div>
                               <p className="font-medium">{member.email}</p>
-                              <p className="text-sm text-muted-foreground capitalize">{member.role}</p>
+                              <p className="text-sm text-muted-foreground capitalize">
+                                {member.role}
+                                {team.captainIds?.includes(member.id) && (
+                                  <span className="ml-2 inline-flex items-center rounded bg-primary/10 text-primary px-2 py-0.5 text-xs">Captain</span>
+                                )}
+                              </p>
                             </div>
-                            {member.id !== team.managerId && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-transparent"
-                                onClick={async () => {
-                                  try {
-                                    await api.removeTeamMember(team.id, member.id);
-                                    // Refresh local team state
-                                    const updated = await api.getTeam(team.id);
-                                    setTeam(updated);
-                                    toast.success("Member removed");
-                                  } catch (e: any) {
-                                    toast.error(e?.message || "Failed to remove member");
-                                  }
-                                }}
-                              >
-                                <UserMinus className="w-4 h-4 mr-1" />
-                                Remove
-                              </Button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {isTeamManager && member.id !== team.managerId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-transparent"
+                                  onClick={async () => {
+                                    try {
+                                      await api.removeTeamMember(team.id, member.id);
+                                      const updated = await api.getTeam(team.id);
+                                      setTeam(updated);
+                                      toast.success("Member removed");
+                                    } catch (e: any) {
+                                      toast.error(e?.message || "Failed to remove member");
+                                    }
+                                  }}
+                                >
+                                  <UserMinus className="w-4 h-4 mr-1" />
+                                  Remove
+                                </Button>
+                              )}
+                              {isTeamManager && member.id !== team.managerId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-transparent"
+                                  onClick={async () => {
+                                    try {
+                                      const enable = !(team.captainIds?.includes(member.id));
+                                      const updated = await api.setTeamCaptain(team.id, member.id, enable);
+                                      setTeam(updated);
+                                      toast.success(enable ? "Captain assigned" : "Captain removed");
+                                    } catch (e: any) {
+                                      toast.error(e?.message || "Failed to update captain");
+                                    }
+                                  }}
+                                >
+                                  {team.captainIds?.includes(member.id) ? "Remove Captain" : "Make Captain"}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>

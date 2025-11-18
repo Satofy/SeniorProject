@@ -73,6 +73,7 @@ export interface Team {
   gamesPlayed?: number;
   createdAt?: string;
   games?: string[];
+  captainIds?: string[];
   // Unify shape with esports-rcd-frontend: store full request objects instead of just a count
   pendingRequests?: Array<{
     id: string;
@@ -425,6 +426,12 @@ class ApiClient {
     });
   }
 
+  async setTeamCaptain(teamId: string, userId: string, enabled: boolean) {
+    return this.request<Team>(`/api/teams/${teamId}/captains/${userId}`, {
+      method: enabled ? "POST" : "DELETE",
+    });
+  }
+
   async updateTeamMemberRole(
     teamId: string,
     userId: string,
@@ -440,6 +447,13 @@ class ApiClient {
   async deleteTeam(teamId: string) {
     return this.request(`/api/teams/${teamId}`, {
       method: "DELETE",
+    });
+  }
+
+  async updateTeam(teamId: string, data: { name?: string; tag?: string }) {
+    return this.request<Team>(`/api/teams/${teamId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data || {}),
     });
   }
 
