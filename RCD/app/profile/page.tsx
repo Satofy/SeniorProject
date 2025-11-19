@@ -17,13 +17,67 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
+function countryToFlag(code: string): string {
+  if (!code) return "🏳️"
+  const cc = code.trim().toUpperCase()
+  if (cc.length !== 2) return cc
+  const A = 0x1F1E6
+  const base = "A".charCodeAt(0)
+  const chars = [...cc].map((c) => String.fromCodePoint(A + (c.charCodeAt(0) - base)))
+  return chars.join("")
+}
+
+function labelForGameId(key: string): string {
+  const map: Record<string,string> = {
+    playstation: "PlayStation",
+    pubgMobile: "PUBG Mobile",
+    rocketLeague: "Rocket League",
+    activision: "Activision",
+    riot: "Riot",
+    r6s: "R6S",
+    mobileLegends: "Mobile Legends",
+    battleNet: "Battle.net",
+    steam: "Steam",
+    codMobile: "CoD Mobile",
+    streetFighter: "Street Fighter",
+    smashBros: "Smash Bros",
+  }
+  return map[key] || key
+}
+
 function ProfileContent() {
   const { user, refreshUser } = useAuth()
   const [editing, setEditing] = useState(false)
+  const [activeTab, setActiveTab] = useState<"overview" | "gameIds" | "general">("overview")
   const [username, setUsername] = useState(user?.username || "")
   const [email, setEmail] = useState(user?.email || "")
   const [avatarPreview, setAvatarPreview] = useState<string | undefined>(user?.avatarUrl)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [country, setCountry] = useState(user?.country || "BH")
+  const [timezone, setTimezone] = useState(user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const [region, setRegion] = useState(user?.region || "")
+  const [gameIds, setGameIds] = useState<Record<string, string>>({
+    playstation: user?.gameIds?.playstation || "",
+    pubgMobile: user?.gameIds?.pubgMobile || "",
+    rocketLeague: user?.gameIds?.rocketLeague || "",
+    activision: user?.gameIds?.activision || "",
+    riot: user?.gameIds?.riot || "",
+    r6s: user?.gameIds?.r6s || "",
+    mobileLegends: user?.gameIds?.mobileLegends || "",
+    battleNet: user?.gameIds?.battleNet || "",
+    steam: user?.gameIds?.steam || "",
+    codMobile: user?.gameIds?.codMobile || "",
+    streetFighter: user?.gameIds?.streetFighter || "",
+    smashBros: user?.gameIds?.smashBros || "",
+  })
+  const [social, setSocial] = useState<Record<string, string>>({
+    snapchat: user?.social?.snapchat || "",
+    youtube: user?.social?.youtube || "",
+    discord: user?.social?.discord || "",
+    twitch: user?.social?.twitch || "",
+    twitter: user?.social?.twitter || "",
+    instagram: user?.social?.instagram || "",
+  })
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -40,10 +94,16 @@ function ProfileContent() {
         username: username || undefined,
         email: email || undefined,
         avatarUrl: avatarPreview,
+        gameIds,
+        social,
+        timezone,
+        country,
+        region: region || undefined,
       })
       toast.success("Profile updated successfully")
       await refreshUser()
       setEditing(false)
+      setActiveTab("overview")
     } catch (error: any) {
       toast.error(error.message || "Failed to update profile")
     } finally {
@@ -114,74 +174,160 @@ function ProfileContent() {
 
       <div className="space-y-6">
         {/* Profile Info */}
-        <Card className="border-primary/20">
-          <CardHeader>
+        <Card className="border-primary/20 overflow-hidden">
+          <CardHeader className="relative">
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/10 via-purple-500/10 to-transparent" />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Avatar className="h-14 w-14">
-                  <AvatarImage src={avatarPreview || user?.avatarUrl || "/placeholder-user.jpg"} alt={user?.username || user?.email || "avatar"} />
-                  <AvatarFallback>
-                    {(user?.username || user?.email || "U").slice(0,2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="relative">
+                  <Avatar className="h-16 w-16 ring-2 ring-border">
+                    <AvatarImage src={(editing ? avatarPreview : user?.avatarUrl) || "/placeholder-user.jpg"} alt={user?.username || user?.email || "avatar"} />
+                    <AvatarFallback>
+                      {(user?.username || user?.email || "U").slice(0,2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {editing && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onPickAvatar}
+                        className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-background/90 px-2 py-0.5 text-xs shadow ring-1 ring-border hover:bg-background"
+                      >
+                        Change
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={onAvatarFileChange}
+                      />
+                    </>
+                  )}
+                </div>
                 <div>
-                  <CardTitle>Profile Information</CardTitle>
-                  <CardDescription>Your personal details and account information</CardDescription>
+                  <CardTitle className="leading-tight">{editing ? "Edit Profile" : "Profile Information"}</CardTitle>
+                  <CardDescription>
+                    {editing ? "Update your account details" : "Your personal details and account information"}
+                  </CardDescription>
+                  {!editing && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      {country && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5">
+                          <span>{countryToFlag(country)}</span>
+                          <span>{country}</span>
+                        </span>
+                      )}
+                      {user?.createdAt && (
+                        <span className="inline-flex items-center rounded-md border border-border px-2 py-0.5">
+                          Member since {new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              {!editing && (
-                <Button onClick={() => setEditing(true)} variant="outline">
-                  Edit Profile
+              {!editing ? (
+                <div className="flex gap-2">
+                  <Button onClick={() => { setEditing(true); setActiveTab("gameIds") }} variant="default">
+                    Edit Profile
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={onRemoveAvatar} disabled={loading}>
+                  Reset Photo
                 </Button>
               )}
             </div>
+            {editing && (
+              <p className="mt-6 text-xs text-muted-foreground">PNG or JPG up to 2MB.</p>
+            )}
           </CardHeader>
           <CardContent>
             {editing ? (
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Avatar</Label>
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-16 w-16">
-                      <AvatarImage src={avatarPreview || "/placeholder-user.jpg"} alt="avatar preview" />
-                      <AvatarFallback>
-                        {(username || email || "U").slice(0,2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" onClick={onPickAvatar} disabled={loading}>Change Photo</Button>
-                      <Button type="button" variant="ghost" onClick={onRemoveAvatar} disabled={loading}>Remove</Button>
+              <form onSubmit={handleUpdateProfile} className="space-y-6">
+                {/* Tabs only visible in edit mode */}
+                <div className="mb-2 flex items-center gap-6 border-b border-border">
+                  {(["gameIds","general"] as const).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setActiveTab(key)}
+                      className={`-mb-px border-b-2 px-1 py-2 text-sm ${activeTab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {key === "gameIds" ? "Game IDs" : "General"}
+                    </button>
+                  ))}
+                </div>
+                {activeTab === "gameIds" && (
+                  <>
+                    <div>
+                      <h3 className="mb-3 text-sm font-semibold">Game IDs</h3>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {Object.entries(gameIds).map(([k,v]) => (
+                          <div key={k} className="space-y-1">
+                            <Label className="capitalize">{labelForGameId(k)}</Label>
+                            <Input value={v} onChange={(e)=>setGameIds((s)=>({ ...s, [k]: e.target.value }))} placeholder={`${labelForGameId(k)} ID`} disabled={loading} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={onAvatarFileChange}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    placeholder="Enter username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
+                    <div>
+                      <h3 className="mb-3 text-sm font-semibold">Social Media</h3>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {Object.entries(social).map(([k,v]) => (
+                          <div key={k} className="space-y-1">
+                            <Label className="capitalize">{k}</Label>
+                            <Input value={v} onChange={(e)=>setSocial((s)=>({ ...s, [k]: e.target.value }))} placeholder={`${k} username`} disabled={loading} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {activeTab === "general" && (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="username">Username</Label>
+                        <Input
+                          id="username"
+                          placeholder="Enter username"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="Enter email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Country</Label>
+                        <Input id="country" placeholder="ISO code (e.g., BH)" value={country} onChange={(e)=>setCountry(e.target.value.toUpperCase())} disabled={loading} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="timezone">Timezone</Label>
+                        <Input id="timezone" placeholder="Region/City" value={timezone} onChange={(e)=>setTimezone(e.target.value)} disabled={loading} />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="region">Region</Label>
+                        <Input id="region" placeholder="Optional region" value={region} onChange={(e)=>setRegion(e.target.value)} disabled={loading} />
+                      </div>
+                    </div>
+                  </>
+                )}
+                {/* Global actions for all tabs */}
                 <div className="flex gap-3">
                   <Button type="submit" disabled={loading}>
                     {loading ? (
@@ -201,6 +347,10 @@ function ProfileContent() {
                       setUsername(user?.username || "")
                       setEmail(user?.email || "")
                       setAvatarPreview(user?.avatarUrl)
+                      setCountry(user?.country || "")
+                      setTimezone(user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)
+                      setRegion(user?.region || "")
+                      setActiveTab("overview")
                     }}
                     disabled={loading}
                   >
@@ -209,41 +359,41 @@ function ProfileContent() {
                 </div>
               </form>
             ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <User className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">Username</p>
-                    <p className="font-medium">{user?.username || "Not set"}</p>
-                  </div>
+              <div className="space-y-6">
+                {/* Overview Tab (read-only) */}
+                <div className="flex items-center gap-6 border-b border-border">
+                  <div className="-mb-px border-b-2 border-primary px-1 py-2 text-sm">Overview</div>
                 </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <Mail className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{user?.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <Shield className="w-5 h-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm text-muted-foreground">Role</p>
-                    <Badge variant="outline" className="capitalize">
-                      {user?.role?.replace("_", " ")}
-                    </Badge>
-                  </div>
-                </div>
-                {user?.teamId && (
-                  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                    <Users className="w-5 h-5 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground">Team</p>
-                      <Link href={`/teams/${user.teamId}`} className="font-medium text-primary hover:underline">
-                        View Team
-                      </Link>
+                {/* Statistics */}
+                <div className="grid gap-4 sm:grid-cols-4">
+                  {[
+                    { label: 'Matches', value: '0' },
+                    { label: 'Win Rate %', value: '0.00' },
+                    { label: 'Highest Streak', value: '0' },
+                    { label: 'Trophies', value: '0' },
+                  ].map((s) => (
+                    <div key={s.label} className="rounded-lg border border-border p-4 text-center">
+                      <div className="text-2xl font-semibold">{s.value}</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</div>
                     </div>
+                  ))}
+                </div>
+                {/* Game IDs (read-only) */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Game IDs</h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {Object.entries(user?.gameIds || {}).filter(([,v]) => !!v).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No game IDs added yet.</p>
+                    ) : (
+                      Object.entries(user?.gameIds || {}).filter(([,v]) => v).map(([k,v]) => (
+                        <div key={k} className="rounded-lg border border-border p-4">
+                          <div className="text-xs text-muted-foreground">{labelForGameId(k)}</div>
+                          <div className="font-medium break-all">{String(v)}</div>
+                        </div>
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </CardContent>
@@ -305,22 +455,7 @@ function ProfileContent() {
           </CardContent>
         </Card>
 
-        {/* Account Info */}
-        <Card className="border-muted/50 bg-muted/20">
-          <CardHeader>
-            <CardTitle className="text-sm">Account Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Account ID</span>
-              <span className="font-mono">{user?.id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Role</span>
-              <span className="capitalize">{user?.role?.replace("_", " ")}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Account Info removed by request */}
       </div>
     </div>
   )

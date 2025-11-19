@@ -8,6 +8,32 @@ export type MockUser = {
   // Single-team affiliation for simplified model
   teamId?: string;
   avatarUrl?: string;
+  createdAt?: string;
+  country?: string; // ISO-2 like "BH"
+  region?: string;
+  timezone?: string;
+  social?: {
+    snapchat?: string;
+    youtube?: string;
+    discord?: string;
+    twitch?: string;
+    twitter?: string;
+    instagram?: string;
+  };
+  gameIds?: {
+    playstation?: string;
+    pubgMobile?: string;
+    rocketLeague?: string;
+    activision?: string;
+    riot?: string;
+    r6s?: string;
+    mobileLegends?: string;
+    battleNet?: string;
+    steam?: string;
+    codMobile?: string;
+    streetFighter?: string;
+    smashBros?: string;
+  };
 };
 
 export type MockTeam = {
@@ -114,6 +140,9 @@ if (!users.length) {
       role: "team_manager",
       username: "owner",
       avatarUrl: "/placeholder-user.jpg",
+      createdAt: new Date("2025-11-08T00:00:00Z").toISOString(),
+      country: "BH",
+      timezone: "Asia/Bahrain",
     },
     {
       id: "2",
@@ -121,6 +150,7 @@ if (!users.length) {
       role: "player",
       username: "player1",
       avatarUrl: "/placeholder-user.jpg",
+      createdAt: new Date().toISOString(),
     },
     {
       id: "3",
@@ -128,6 +158,7 @@ if (!users.length) {
       role: "player",
       username: "player2",
       avatarUrl: "/placeholder-user.jpg",
+      createdAt: new Date().toISOString(),
     },
     {
       id: "4",
@@ -135,6 +166,7 @@ if (!users.length) {
       role: "admin",
       username: "admin",
       avatarUrl: "/placeholder-user.jpg",
+      createdAt: new Date().toISOString(),
     }
   );
 }
@@ -462,6 +494,7 @@ export function addUser(
     role,
     username,
     avatarUrl: "/placeholder-user.jpg",
+    createdAt: new Date().toISOString(),
   };
   users.push(u);
   log(u.id, "register", `User ${email} registered`);
@@ -470,7 +503,7 @@ export function addUser(
 
 export function updateUserProfile(
   userId: string,
-  data: Partial<Pick<MockUser, "username" | "email" | "avatarUrl">>
+  data: Partial<Pick<MockUser, "username" | "email" | "avatarUrl" | "social" | "gameIds" | "timezone" | "country" | "region">>
 ) {
   const u = users.find((x) => x.id === userId);
   if (!u) return null;
@@ -478,18 +511,19 @@ export function updateUserProfile(
   if (typeof data.username !== "undefined") allowed.username = data.username;
   if (typeof data.email !== "undefined") allowed.email = data.email;
   if (typeof data.avatarUrl !== "undefined") allowed.avatarUrl = data.avatarUrl;
+  if (typeof data.social !== "undefined")
+    allowed.social = { ...(u.social || {}), ...(data.social || {}) };
+  if (typeof data.gameIds !== "undefined")
+    allowed.gameIds = { ...(u.gameIds || {}), ...(data.gameIds || {}) };
+  if (typeof data.timezone !== "undefined") allowed.timezone = data.timezone;
+  if (typeof data.country !== "undefined") allowed.country = data.country;
+  if (typeof data.region !== "undefined") allowed.region = data.region;
   Object.assign(u, allowed);
   // Keep team member entries in sync with latest user fields
   teams.forEach((t) => {
-    t.members = t.members.map((m) =>
-      m.id === userId ? { ...m, ...allowed } : m
-    );
+    t.members = t.members.map((m) => (m.id === userId ? { ...m, ...allowed } : m));
   });
-  log(
-    userId,
-    "update_user",
-    `Updated profile fields: ${Object.keys(allowed).join(",")}`
-  );
+  log(userId, "update_user", `Updated profile fields: ${Object.keys(allowed).join(",")}`);
   return u;
 }
 

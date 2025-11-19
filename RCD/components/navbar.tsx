@@ -440,9 +440,24 @@ export function Navbar() {
               <div className="border-t border-border pt-4">
                 {user ? (
                   <>
-                    <p className="px-2 text-sm text-muted-foreground">
-                      {displayName}
-                    </p>
+                    <div className="flex items-center gap-3 px-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user?.avatarUrl || "/placeholder-user.jpg"} alt={displayName} />
+                        <AvatarFallback>
+                          {(displayName || "U").slice(0,2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{displayName}</p>
+                        <Link
+                          href="/profile"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          My Profile
+                        </Link>
+                      </div>
+                    </div>
                     <Button
                       onClick={handleLogout}
                       variant="outline"

@@ -11,6 +11,32 @@ export interface User {
   role: "guest" | "player" | "team_manager" | "admin";
   teamId?: string;
   avatarUrl?: string;
+  createdAt?: string
+  country?: string
+  region?: string
+  timezone?: string
+  social?: {
+    snapchat?: string;
+    youtube?: string;
+    discord?: string;
+    twitch?: string;
+    twitter?: string;
+    instagram?: string;
+  }
+  gameIds?: {
+    playstation?: string;
+    pubgMobile?: string;
+    rocketLeague?: string;
+    activision?: string;
+    riot?: string;
+    r6s?: string;
+    mobileLegends?: string;
+    battleNet?: string;
+    steam?: string;
+    codMobile?: string;
+    streetFighter?: string;
+    smashBros?: string;
+  }
 }
 
 export interface Tournament {

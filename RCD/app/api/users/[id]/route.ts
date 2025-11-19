@@ -31,18 +31,23 @@ export async function PATCH(
     const user = users.find((u) => u.id === id);
     return NextResponse.json(user);
   }
-  const { username, email, avatarUrl } = body || {};
+  const { username, email, avatarUrl, social, gameIds, timezone, country, region } = body || {};
   if (
     typeof username === "undefined" &&
     typeof email === "undefined" &&
-    typeof avatarUrl === "undefined"
+    typeof avatarUrl === "undefined" &&
+    typeof social === "undefined" &&
+    typeof gameIds === "undefined" &&
+    typeof timezone === "undefined" &&
+    typeof country === "undefined" &&
+    typeof region === "undefined"
   ) {
     return NextResponse.json(
       { message: "No fields to update" },
       { status: 400 }
     );
   }
-  const updated = updateUserProfile(id, { username, email, avatarUrl });
+  const updated = updateUserProfile(id, { username, email, avatarUrl, social, gameIds, timezone, country, region });
   if (!updated)
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json(updated);
