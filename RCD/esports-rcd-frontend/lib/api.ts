@@ -42,7 +42,16 @@ export type Tournament = {
   currentParticipants?: number;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || DEV_DEFAULT;
+export type NotificationResponse = {
+  id: string
+  type: 'info' | 'warning' | 'success' | 'action'
+  message: string
+  createdAt: string
+  metadata?: Record<string, unknown>
+  read?: boolean
+};
+
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || DEV_DEFAULT;
 
 function authHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {}
@@ -118,6 +127,21 @@ export const api = {
     } catch (e: any) {
       throw new Error(e?.message || 'User update not available')
     }
+  },
+  async getNotifications(): Promise<NotificationResponse[]> {
+    return request<NotificationResponse[]>('/api/notifications')
+  },
+  async clearNotifications() {
+    return request('/api/notifications', { method: 'DELETE' })
+  },
+  async deleteNotification(id: string) {
+    return request(`/api/notifications/${id}`, { method: 'DELETE' })
+  },
+  async markAllNotificationsRead() {
+    return request('/api/notifications/read', { method: 'POST' })
+  },
+  async markNotificationRead(id: string) {
+    return request(`/api/notifications/${id}/read`, { method: 'POST' })
   },
   async getTournaments(): Promise<Tournament[]> {
     try {

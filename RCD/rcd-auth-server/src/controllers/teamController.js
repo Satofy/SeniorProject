@@ -1,6 +1,7 @@
 const Team = require('../models/team');
 const User = require('../models/user');
 const AuditLog = require('../models/auditLog');
+const { createNotification } = require('../services/notificationService');
 
 exports.listTeams = async (req, res) => {
   const teams = await Team.find().limit(100);
@@ -88,6 +89,17 @@ exports.requestJoin = async (req, res) => {
   if (team.members.some(m => m.toString() === user._id.toString())) return res.status(400).json({ message: 'Already a member' });
   team.pendingRequests.push({ userId: user._id, message: req.body.message });
   await team.save();
+  // Notify manager about new request
+  try {
+    await createNotification({
+      userId: team.managerId,
+      type: 'action',
+      message: `${user.username || user.email || 'A player'} requested to join ${team.name}`,
+      metadata: { teamId: team._id.toString(), requesterId: user._id.toString() }
+    });
+  } catch (err) {
+    console.warn('Failed to send request notification', err);
+  }
   res.json({ message: 'Request submitted' });
 };
 
@@ -99,10 +111,21 @@ exports.approveRequest = async (req, res) => {
   if (team.managerId.toString() !== user._id.toString()) return res.status(403).json({ message: 'Forbidden' });
   const request = team.pendingRequests.id(reqId);
   if (!request) return res.status(404).json({ message: 'Request not found' });
-  team.members.push(request.userId);
+  const requesterId = request.userId;
+  team.members.push(requesterId);
   request.remove();
   await team.save();
   await AuditLog.create({ user: req.user?.email || String(req.user?._id || ''), action: 'approve_join', details: `Approved request ${reqId} for team ${team.name}` });
+  try {
+    await createNotification({
+      userId: requesterId,
+      type: 'success',
+      message: `You have been approved to join ${team.name}`,
+      metadata: { teamId: team._id.toString() }
+    });
+  } catch (err) {
+    console.warn('Failed to send approval notification', err);
+  }
   res.json({ message: 'Request approved' });
 };
 
@@ -125,9 +148,20 @@ exports.declineRequest = async (req, res) => {
   if (team.managerId.toString() !== user._id.toString()) return res.status(403).json({ message: 'Forbidden' });
   const request = team.pendingRequests.id(reqId);
   if (!request) return res.status(404).json({ message: 'Request not found' });
+  const requesterId = request.userId;
   request.remove();
   await team.save();
   await AuditLog.create({ user: req.user?.email || String(req.user?._id || ''), action: 'decline_join', details: `Declined request ${reqId} for team ${team.name}` });
+  try {
+    await createNotification({
+      userId: requesterId,
+      type: 'warning',
+      message: `Your request to join ${team.name} was declined`,
+      metadata: { teamId: team._id.toString() }
+    });
+  } catch (err) {
+    console.warn('Failed to send decline notification', err);
+  }
   res.json({ message: 'Request declined' });
 };
 

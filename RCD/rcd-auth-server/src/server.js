@@ -6,6 +6,7 @@ const authRoutes = require('./routes/auth');
 const tournamentsRoutes = require('./routes/tournaments');
 const teamsRoutes = require('./routes/teams');
 const usersRoutes = require('./routes/users');
+const notificationsRoutes = require('./routes/notifications');
 const authMiddleware = require('./middleware/authMiddleware');
 const User = require('./models/user');
 let MongoMemoryServer;
@@ -98,6 +99,7 @@ async function start() {
   app.use('/api/tournaments', tournamentsRoutes);
   app.use('/api/teams', teamsRoutes);
   app.use('/api/users', usersRoutes);
+  app.use('/api/notifications', notificationsRoutes);
 
   // audit logs listing (admin only)
   const requireRole = require('./middleware/roleMiddleware');

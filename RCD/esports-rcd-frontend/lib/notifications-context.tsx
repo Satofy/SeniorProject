@@ -1,7 +1,7 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
-import { api } from '@/lib/api'
+import { api, API_URL, type NotificationResponse } from '@/lib/api'
 
 export type Notification = {
   id: string
@@ -10,6 +10,7 @@ export type Notification = {
   createdAt: string
   actionLabel?: string
   onAction?: () => void
+  read?: boolean
 }
 
 type NotificationsContextValue = {
@@ -52,68 +53,52 @@ function generateId() {
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
+  const [remoteNotifications, setRemoteNotifications] = useState<Notification[]>([])
   const [systemNotifications, setSystemNotifications] = useState<Notification[]>([])
   const [localNotifications, setLocalNotifications] = useState<Notification[]>([])
   const dismissed = React.useRef<Set<string>>(loadDismissed())
 
-  const dismiss = useCallback((id: string) => {
-    dismissed.current.add(id)
-    saveDismissed(dismissed.current)
-    setSystemNotifications((prev) => prev.filter((n) => n.id !== id))
-    setLocalNotifications((prev) => prev.filter((n) => n.id !== id))
+  const mapRemoteNotification = useCallback((payload: NotificationResponse): Notification => {
+    const metadata = payload.metadata ?? {}
+    const teamId = typeof metadata === 'object' && metadata !== null ? (metadata as Record<string, any>).teamId : undefined
+    return {
+      id: payload.id,
+      type: payload.type,
+      message: payload.message,
+      createdAt: payload.createdAt || new Date().toISOString(),
+      actionLabel: teamId ? 'View team' : undefined,
+      onAction: teamId
+        ? () => {
+            if (typeof window !== 'undefined') {
+              window.location.href = `/teams/${teamId}`
+            }
+          }
+        : undefined,
+      read: payload.read,
+    }
   }, [])
 
-  const clearAll = useCallback(() => {
-    const all = [...systemNotifications, ...localNotifications]
-    all.forEach((n) => dismissed.current.add(n.id))
-    setSystemNotifications([])
-    setLocalNotifications([])
-    saveDismissed(dismissed.current)
-  }, [localNotifications, systemNotifications])
+  const refreshRemote = useCallback(async () => {
+    if (!user) {
+      setRemoteNotifications([])
+      return
+    }
+    try {
+      const data = await api.getNotifications()
+      setRemoteNotifications(data.map(mapRemoteNotification))
+    } catch (err) {
+      console.error('Failed to load notifications', err)
+    }
+  }, [mapRemoteNotification, user])
 
-  const refresh = useCallback(async () => {
+  const rebuildSystem = useCallback(() => {
     if (!user) {
       setSystemNotifications([])
-      setLocalNotifications([])
       return
     }
     const list: Notification[] = []
 
-    // Pending requests notification for managers
-    try {
-      if (user.role === 'team_manager') {
-        // fetch team via users teamId maybe: need team membership; call getTeams and find where managerId = user.id
-        const teams = await api.getTeams()
-        const managed = teams.filter(t => t.managerId === user.id)
-        const results = await Promise.all(managed.map(async (t) => {
-          try {
-            const reqs = await api.getTeamRequests(t.id)
-            return { team: t, count: reqs.length }
-          } catch {
-            return { team: t, count: 0 }
-          }
-        }))
-        for (const { team: t, count } of results) {
-          if (count > 0) {
-            const id = `pending-${t.id}`
-            if (!dismissed.current.has(id)) {
-              list.push({
-                id,
-                type: 'action',
-                message: `${count} pending request${count === 1 ? '' : 's'} for team ${t.name}`,
-                createdAt: new Date().toISOString(),
-                actionLabel: 'Review',
-                onAction: () => {
-                  window.location.href = `/teams/${t.id}`
-                }
-              })
-            }
-          }
-        }
-      }
-    } catch {}
-
-    // Player: show confirmation after a recent join request
+    // Player: show confirmation after a recent join request (local only signal)
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('rcd_last_join_req') : null
       if (raw) {
@@ -127,7 +112,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             message: 'Your join request was sent successfully.',
             createdAt: new Date(parsed.ts).toISOString(),
             actionLabel: 'View team',
-            onAction: () => { window.location.href = `/teams/${parsed.teamId}` },
+            onAction: () => {
+              if (typeof window !== 'undefined') {
+                window.location.href = `/teams/${parsed.teamId}`
+              }
+            },
           })
         }
         if (!fresh) {
@@ -145,31 +134,113 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     setSystemNotifications(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
   }, [user])
 
+  const dismiss = useCallback((id: string) => {
+    if (remoteNotifications.some((n) => n.id === id)) {
+      setRemoteNotifications((prev) => prev.filter((n) => n.id !== id))
+      api.deleteNotification(id).catch(() => {})
+      return
+    }
+    dismissed.current.add(id)
+    saveDismissed(dismissed.current)
+    setSystemNotifications((prev) => prev.filter((n) => n.id !== id))
+    setLocalNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [remoteNotifications])
+
+  const clearAll = useCallback(() => {
+    const all = [...systemNotifications, ...localNotifications]
+    all.forEach((n) => dismissed.current.add(n.id))
+    setSystemNotifications([])
+    setLocalNotifications([])
+    setRemoteNotifications([])
+    saveDismissed(dismissed.current)
+    api.clearNotifications().catch(() => {})
+  }, [localNotifications, systemNotifications])
+
+  const refresh = useCallback(async () => {
+    if (!user) {
+      setSystemNotifications([])
+      setLocalNotifications([])
+      setRemoteNotifications([])
+      return
+    }
+    await refreshRemote()
+    rebuildSystem()
+  }, [rebuildSystem, refreshRemote, user])
+
   useEffect(() => {
-    let timer: any
     refresh()
+    let timer: any = null
     timer = setInterval(() => {
       refresh()
-    }, 60_000)
-    const handler = () => refresh()
-    if (typeof window !== 'undefined') {
-      window.addEventListener('rcd-notifications-refresh', handler)
-    }
+    }, 5 * 60_000) // fallback refresh every 5 minutes
     return () => {
-      clearInterval(timer)
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('rcd-notifications-refresh', handler)
-      }
+      if (timer) clearInterval(timer)
     }
   }, [refresh])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => {
+      refresh()
+    }
+    window.addEventListener('rcd-notifications-refresh', handler)
+    return () => {
+      window.removeEventListener('rcd-notifications-refresh', handler)
+    }
+  }, [refresh])
+
+  useEffect(() => {
+    if (!user) return
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
+    if (!API_URL) return
+    const token = localStorage.getItem('rcd_token')
+    if (!token) return
+    let stopped = false
+    let source: EventSource | null = null
+    let retryMs = 2000
+
+    const connect = () => {
+      if (stopped) return
+      source = new EventSource(`${API_URL}/api/notifications/stream?token=${encodeURIComponent(token)}`)
+      source.addEventListener('notification', (event) => {
+        try {
+          const payload = JSON.parse(event.data) as NotificationResponse
+          setRemoteNotifications((prev) => {
+            const filtered = prev.filter((n) => n.id !== payload.id)
+            return [mapRemoteNotification(payload), ...filtered]
+          })
+        } catch (err) {
+          console.error('Failed to parse notification payload', err)
+        }
+      })
+      source.onopen = () => {
+        retryMs = 2000
+      }
+      source.onerror = () => {
+        if (source) source.close()
+        if (stopped) return
+        setTimeout(connect, retryMs)
+        retryMs = Math.min(retryMs * 2, 15000)
+      }
+    }
+
+    connect()
+    return () => {
+      stopped = true
+      if (source) source.close()
+    }
+  }, [mapRemoteNotification, user])
+
   const notifications = useMemo(() => {
-    return [...systemNotifications, ...localNotifications]
+    return [...remoteNotifications, ...systemNotifications, ...localNotifications]
       .filter((n) => !dismissed.current.has(n.id))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [localNotifications, systemNotifications])
+  }, [localNotifications, remoteNotifications, systemNotifications])
 
-  const unreadCount = notifications.length
+  const unreadCount =
+    remoteNotifications.filter((n) => !n.read).length +
+    systemNotifications.length +
+    localNotifications.length
 
   const addNotification: NotificationsContextValue['addNotification'] = useCallback((notification) => {
     const id = notification.id ?? generateId()
