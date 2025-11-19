@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { User, Mail, Shield, Users, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -88,6 +88,27 @@ function ProfileContent() {
 
     if (!user) return
 
+    const wantsPasswordChange = !!(
+      currentPassword ||
+      newPassword ||
+      confirmPassword
+    );
+
+    if (wantsPasswordChange) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        toast.error("Please fill in all password fields");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("New passwords do not match");
+        return;
+      }
+      if (newPassword.length < 8) {
+        toast.error("Password must be at least 8 characters");
+        return;
+      }
+    }
+
     setLoading(true)
     try {
       await api.updateUser(user.id, {
@@ -101,6 +122,12 @@ function ProfileContent() {
         region: region || undefined,
       })
       toast.success("Profile updated successfully")
+      if (wantsPasswordChange) {
+        toast.success("Password changed successfully");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
       await refreshUser()
       setEditing(false)
       setActiveTab("overview")
@@ -169,7 +196,9 @@ function ProfileContent() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Profile</h1>
-        <p className="text-muted-foreground">Manage your account settings and preferences</p>
+        <p className="text-muted-foreground">
+          Manage your account settings and preferences
+        </p>
       </div>
 
       <div className="space-y-6">
@@ -181,9 +210,17 @@ function ProfileContent() {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <Avatar className="h-16 w-16 ring-2 ring-border">
-                    <AvatarImage src={(editing ? avatarPreview : user?.avatarUrl) || "/placeholder-user.jpg"} alt={user?.username || user?.email || "avatar"} />
+                    <AvatarImage
+                      src={
+                        (editing ? avatarPreview : user?.avatarUrl) ||
+                        "/placeholder-user.jpg"
+                      }
+                      alt={user?.username || user?.email || "avatar"}
+                    />
                     <AvatarFallback>
-                      {(user?.username || user?.email || "U").slice(0,2).toUpperCase()}
+                      {(user?.username || user?.email || "U")
+                        .slice(0, 2)
+                        .toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   {editing && (
@@ -206,9 +243,13 @@ function ProfileContent() {
                   )}
                 </div>
                 <div>
-                  <CardTitle className="leading-tight">{editing ? "Edit Profile" : "Profile Information"}</CardTitle>
+                  <CardTitle className="leading-tight">
+                    {editing ? "Edit Profile" : "Profile Information"}
+                  </CardTitle>
                   <CardDescription>
-                    {editing ? "Update your account details" : "Your personal details and account information"}
+                    {editing
+                      ? "Update your account details"
+                      : "Your personal details and account information"}
                   </CardDescription>
                   {!editing && (
                     <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -220,7 +261,11 @@ function ProfileContent() {
                       )}
                       {user?.createdAt && (
                         <span className="inline-flex items-center rounded-md border border-border px-2 py-0.5">
-                          Member since {new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          Member since{" "}
+                          {new Date(user.createdAt).toLocaleDateString(
+                            undefined,
+                            { year: "numeric", month: "short", day: "numeric" }
+                          )}
                         </span>
                       )}
                     </div>
@@ -229,18 +274,31 @@ function ProfileContent() {
               </div>
               {!editing ? (
                 <div className="flex gap-2">
-                  <Button onClick={() => { setEditing(true); setActiveTab("gameIds") }} variant="default">
+                  <Button
+                    onClick={() => {
+                      setEditing(true);
+                      setActiveTab("gameIds");
+                    }}
+                    variant="default"
+                  >
                     Edit Profile
                   </Button>
                 </div>
               ) : (
-                <Button variant="ghost" size="sm" onClick={onRemoveAvatar} disabled={loading}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRemoveAvatar}
+                  disabled={loading}
+                >
                   Reset Photo
                 </Button>
               )}
             </div>
             {editing && (
-              <p className="mt-6 text-xs text-muted-foreground">PNG or JPG up to 2MB.</p>
+              <p className="mt-6 text-xs text-muted-foreground">
+                PNG or JPG up to 2MB.
+              </p>
             )}
           </CardHeader>
           <CardContent>
@@ -248,12 +306,16 @@ function ProfileContent() {
               <form onSubmit={handleUpdateProfile} className="space-y-6">
                 {/* Tabs only visible in edit mode */}
                 <div className="mb-2 flex items-center gap-6 border-b border-border">
-                  {(["gameIds","general"] as const).map((key) => (
+                  {(["gameIds", "general"] as const).map((key) => (
                     <button
                       key={key}
                       type="button"
                       onClick={() => setActiveTab(key)}
-                      className={`-mb-px border-b-2 px-1 py-2 text-sm ${activeTab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                      className={`-mb-px border-b-2 px-1 py-2 text-sm ${
+                        activeTab === key
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
                     >
                       {key === "gameIds" ? "Game IDs" : "General"}
                     </button>
@@ -264,21 +326,45 @@ function ProfileContent() {
                     <div>
                       <h3 className="mb-3 text-sm font-semibold">Game IDs</h3>
                       <div className="grid gap-3 md:grid-cols-2">
-                        {Object.entries(gameIds).map(([k,v]) => (
+                        {Object.entries(gameIds).map(([k, v]) => (
                           <div key={k} className="space-y-1">
-                            <Label className="capitalize">{labelForGameId(k)}</Label>
-                            <Input value={v} onChange={(e)=>setGameIds((s)=>({ ...s, [k]: e.target.value }))} placeholder={`${labelForGameId(k)} ID`} disabled={loading} />
+                            <Label className="capitalize">
+                              {labelForGameId(k)}
+                            </Label>
+                            <Input
+                              value={v}
+                              onChange={(e) =>
+                                setGameIds((s) => ({
+                                  ...s,
+                                  [k]: e.target.value,
+                                }))
+                              }
+                              placeholder={`${labelForGameId(k)} ID`}
+                              disabled={loading}
+                            />
                           </div>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <h3 className="mb-3 text-sm font-semibold">Social Media</h3>
+                      <h3 className="mb-3 text-sm font-semibold">
+                        Social Media
+                      </h3>
                       <div className="grid gap-3 md:grid-cols-2">
-                        {Object.entries(social).map(([k,v]) => (
+                        {Object.entries(social).map(([k, v]) => (
                           <div key={k} className="space-y-1">
                             <Label className="capitalize">{k}</Label>
-                            <Input value={v} onChange={(e)=>setSocial((s)=>({ ...s, [k]: e.target.value }))} placeholder={`${k} username`} disabled={loading} />
+                            <Input
+                              value={v}
+                              onChange={(e) =>
+                                setSocial((s) => ({
+                                  ...s,
+                                  [k]: e.target.value,
+                                }))
+                              }
+                              placeholder={`${k} username`}
+                              disabled={loading}
+                            />
                           </div>
                         ))}
                       </div>
@@ -314,15 +400,75 @@ function ProfileContent() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="country">Country</Label>
-                        <Input id="country" placeholder="ISO code (e.g., BH)" value={country} onChange={(e)=>setCountry(e.target.value.toUpperCase())} disabled={loading} />
+                        <Input
+                          id="country"
+                          placeholder="ISO code (e.g., BH)"
+                          value={country}
+                          onChange={(e) =>
+                            setCountry(e.target.value.toUpperCase())
+                          }
+                          disabled={loading}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="timezone">Timezone</Label>
-                        <Input id="timezone" placeholder="Region/City" value={timezone} onChange={(e)=>setTimezone(e.target.value)} disabled={loading} />
+                        <Input
+                          id="timezone"
+                          placeholder="Region/City"
+                          value={timezone}
+                          onChange={(e) => setTimezone(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                       <div className="space-y-2 sm:col-span-2">
                         <Label htmlFor="region">Region</Label>
-                        <Input id="region" placeholder="Optional region" value={region} onChange={(e)=>setRegion(e.target.value)} disabled={loading} />
+                        <Input
+                          id="region"
+                          placeholder="Optional region"
+                          value={region}
+                          onChange={(e) => setRegion(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="current-password">
+                          Current Password
+                        </Label>
+                        <Input
+                          id="current-password"
+                          type="password"
+                          placeholder="Enter current password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <Input
+                          id="new-password"
+                          type="password"
+                          placeholder="Enter new password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="confirm-new-password">
+                          Confirm New Password
+                        </Label>
+                        <Input
+                          id="confirm-new-password"
+                          type="password"
+                          placeholder="Re-enter new password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          disabled={loading}
+                        />
                       </div>
                     </div>
                   </>
@@ -343,14 +489,20 @@ function ProfileContent() {
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      setEditing(false)
-                      setUsername(user?.username || "")
-                      setEmail(user?.email || "")
-                      setAvatarPreview(user?.avatarUrl)
-                      setCountry(user?.country || "")
-                      setTimezone(user?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)
-                      setRegion(user?.region || "")
-                      setActiveTab("overview")
+                      setEditing(false);
+                      setUsername(user?.username || "");
+                      setEmail(user?.email || "");
+                      setAvatarPreview(user?.avatarUrl);
+                      setCountry(user?.country || "");
+                      setTimezone(
+                        user?.timezone ||
+                          Intl.DateTimeFormat().resolvedOptions().timeZone
+                      );
+                      setRegion(user?.region || "");
+                      setCurrentPassword("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setActiveTab("overview");
                     }}
                     disabled={loading}
                   >
@@ -362,19 +514,26 @@ function ProfileContent() {
               <div className="space-y-6">
                 {/* Overview Tab (read-only) */}
                 <div className="flex items-center gap-6 border-b border-border">
-                  <div className="-mb-px border-b-2 border-primary px-1 py-2 text-sm">Overview</div>
+                  <div className="-mb-px border-b-2 border-primary px-1 py-2 text-sm">
+                    Overview
+                  </div>
                 </div>
                 {/* Statistics */}
                 <div className="grid gap-4 sm:grid-cols-4">
                   {[
-                    { label: 'Matches', value: '0' },
-                    { label: 'Win Rate %', value: '0.00' },
-                    { label: 'Highest Streak', value: '0' },
-                    { label: 'Trophies', value: '0' },
+                    { label: "Matches", value: "0" },
+                    { label: "Win Rate %", value: "0.00" },
+                    { label: "Highest Streak", value: "0" },
+                    { label: "Trophies", value: "0" },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-lg border border-border p-4 text-center">
+                    <div
+                      key={s.label}
+                      className="rounded-lg border border-border p-4 text-center"
+                    >
                       <div className="text-2xl font-semibold">{s.value}</div>
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {s.label}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -382,15 +541,27 @@ function ProfileContent() {
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold">Game IDs</h3>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {Object.entries(user?.gameIds || {}).filter(([,v]) => !!v).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No game IDs added yet.</p>
+                    {Object.entries(user?.gameIds || {}).filter(([, v]) => !!v)
+                      .length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No game IDs added yet.
+                      </p>
                     ) : (
-                      Object.entries(user?.gameIds || {}).filter(([,v]) => v).map(([k,v]) => (
-                        <div key={k} className="rounded-lg border border-border p-4">
-                          <div className="text-xs text-muted-foreground">{labelForGameId(k)}</div>
-                          <div className="font-medium break-all">{String(v)}</div>
-                        </div>
-                      ))
+                      Object.entries(user?.gameIds || {})
+                        .filter(([, v]) => v)
+                        .map(([k, v]) => (
+                          <div
+                            key={k}
+                            className="rounded-lg border border-border p-4"
+                          >
+                            <div className="text-xs text-muted-foreground">
+                              {labelForGameId(k)}
+                            </div>
+                            <div className="font-medium break-all">
+                              {String(v)}
+                            </div>
+                          </div>
+                        ))
                     )}
                   </div>
                 </div>
@@ -399,66 +570,10 @@ function ProfileContent() {
           </CardContent>
         </Card>
 
-        {/* Change Password */}
-        <Card className="border-primary/20">
-          <CardHeader>
-            <CardTitle>Change Password</CardTitle>
-            <CardDescription>Update your password to keep your account secure</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  placeholder="Enter current password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  placeholder="Enter new password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-new-password">Confirm New Password</Label>
-                <Input
-                  id="confirm-new-password"
-                  type="password"
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Changing...
-                  </>
-                ) : (
-                  "Change Password"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Account Info removed by request */}
+        {/* Account Info removed by request; password moved into General */}
       </div>
     </div>
-  )
+  );
 }
 
 export default function ProfilePage() {
